@@ -1,4 +1,4 @@
-# runninghub_tools (Go SDK)
+# runninghub-sdk-go 
 
 一个纯标准库（`net/http`）实现的 RunningHub Go SDK，用于：
 
