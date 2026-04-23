@@ -1,0 +1,19 @@
+
+{
+  "taskId": "2047154150516862978",
+  "status": "SUCCESS",
+  "errorCode": "",
+  "errorMessage": "",
+  "results": [
+    {
+      "url": "https://rh-images-1252422369.cos.ap-beijing.myqcloud.com/c91531cbf3337fbe998612da4112ea99/output/621cd241-aafd-45e2-80e3-15a047854274.jpg",
+      "outputType": "jpg"
+    }
+  ],
+  "clientId": "",
+  "promptTips": "",
+  "usage": {
+    "thirdPartyConsumeMoney": "0.14",
+    "taskCostTime": "0"
+  }
+}

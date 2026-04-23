@@ -3,6 +3,7 @@ package runninghub
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -281,6 +282,79 @@ func TestRunStandardModel(t *testing.T) {
 	}
 }
 
+func TestRunStandardModel_BusinessError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/openapi/v2/vidu/image-to-video-q3-pro-fast" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"taskId":       "",
+			"status":       "",
+			"errorCode":    "812",
+			"errorMessage": "CORPAPIKEY_INSUFFICIENT_FUNDS",
+			"results":      nil,
+			"clientId":     "",
+			"promptTips":   "",
+		})
+	}))
+	defer srv.Close()
+
+	c, err := New("testkey", WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = c.RunStandardModel(context.Background(), "vidu/image-to-video-q3-pro-fast", map[string]any{"prompt": "hi"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected APIError, got %T %v", err, err)
+	}
+	if apiErr.Code != 812 {
+		t.Fatalf("Code=%d", apiErr.Code)
+	}
+	if apiErr.Message != "CORPAPIKEY_INSUFFICIENT_FUNDS" {
+		t.Fatalf("Message=%q", apiErr.Message)
+	}
+}
+
+func TestRunStandardModel_FullURLPath(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/openapi/v2/seedance-v1.5-pro/text-to-video" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"taskId":       "t2",
+			"status":       "RUNNING",
+			"errorCode":    "",
+			"errorMessage": "",
+			"results":      nil,
+			"clientId":     "c",
+			"promptTips":   "",
+		})
+	}))
+	defer srv.Close()
+
+	c, err := New("testkey", WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := c.RunStandardModel(context.Background(), "https://www.runninghub.cn/openapi/v2/seedance-v1.5-pro/text-to-video", map[string]any{"prompt": "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.TaskID != "t2" {
+		t.Fatalf("TaskID=%q", out.TaskID)
+	}
+}
+
 func TestPricePreview(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/openapi/v2/price-preview/vidu/image-to-video-q3-pro-fast" {
@@ -319,5 +393,73 @@ func TestPricePreview(t *testing.T) {
 	}
 	if out.Currency != "CNY" {
 		t.Fatalf("Currency=%q", out.Currency)
+	}
+}
+
+func TestDownloadFile(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/x.jpg" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte("image-bytes"))
+	}))
+	defer srv.Close()
+
+	c, err := New("testkey", WithHTTPClient(srv.Client()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dest := filepath.Join(t.TempDir(), "out", "x.jpg")
+	if err := c.DownloadFile(context.Background(), srv.URL+"/x.jpg", dest); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "image-bytes" {
+		t.Fatalf("content=%q", string(b))
+	}
+}
+
+func TestDownloadTaskResults(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/a.jpg":
+			_, _ = w.Write([]byte("a"))
+		case "/b.mp4":
+			_, _ = w.Write([]byte("b"))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	c, err := New("testkey", WithHTTPClient(srv.Client()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	task := &QueryV2Response{
+		TaskID: "task123",
+		Results: []QueryV2ResultItem{
+			{URL: srv.URL + "/a.jpg", OutputType: "jpg"},
+			{URL: srv.URL + "/b.mp4", OutputType: "mp4"},
+		},
+	}
+	dir := t.TempDir()
+	out, err := c.DownloadTaskResults(context.Background(), task, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 2 {
+		t.Fatalf("downloads=%d", len(out))
+	}
+	for _, item := range out {
+		if _, err := os.Stat(item.Path); err != nil {
+			t.Fatalf("missing file %q: %v", item.Path, err)
+		}
 	}
 }

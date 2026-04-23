@@ -1,0 +1,7 @@
+{
+  "prompt": "一只戴着护目镜的柯基犬在月球上驾驶复古摩托车，电影感光影，超细节，4k",
+  "negativePrompt": "blurry, low quality, distorted, extra fingers",
+  "width": 1024,
+  "height": 1024,
+  "numImages": 1
+}

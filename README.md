@@ -29,6 +29,132 @@ go get github.com/difyz9/runninghub-sdk-go
 
 ## 快速开始
 
+### 0) 可直接运行的完整案例
+
+仓库内已经提供可直接执行的示例程序：
+
+- `examples/text_to_image/main.go`
+- `examples/text_to_image/payload.example.json`
+- `examples/image_to_video/main.go`
+- `examples/image_to_video/payload.example.json`
+- `examples/text_to_video/main.go`
+- `examples/text_to_video/payload.example.json`
+
+先设置 API Key：
+
+```bash
+# PowerShell
+$env:RUNNINGHUB_API_KEY="你的 API Key"
+
+# bash
+export RUNNINGHUB_API_KEY="你的 API Key"
+```
+
+#### 示例 A：文生图
+
+文生图示例默认使用 `/openapi/v2/seedream-v4/text-to-image`。如果你想切换到别的文生图模型，再用 `-path` 或 `RUNNINGHUB_TEXT_TO_IMAGE_PATH` 覆盖：
+
+```bash
+go run ./examples/text_to_image \
+	-payload-file ./examples/text_to_image/payload.example.json
+```
+
+任务成功后，示例会把 `result.json` 和下载后的图片保存到 `./examples/text_to_image/output/`。
+
+如果你想覆盖默认模型路径：
+
+```bash
+go run ./examples/text_to_image \
+	-path /openapi/v2/your-text-to-image-model
+```
+
+或者：
+
+```bash
+# PowerShell
+$env:RUNNINGHUB_TEXT_TO_IMAGE_PATH="/openapi/v2/your-text-to-image-model"
+
+# bash
+export RUNNINGHUB_TEXT_TO_IMAGE_PATH="/openapi/v2/your-text-to-image-model"
+```
+
+#### 示例 B：图生视频
+
+这个场景最容易踩坑的是 `imageUrl` 不可访问。优先用 `-upload-file`，让示例先上传本地图，再自动把 `download_url` 写进请求体。
+
+```bash
+go run ./examples/image_to_video \
+	-path /openapi/v2/vidu/image-to-video-q3-pro-fast \
+	-payload-file ./examples/image_to_video/payload.example.json \
+	-upload-file ./input.png
+```
+
+任务成功后，示例会把 `result.json` 和下载后的视频保存到 `./examples/image_to_video/output/`。
+
+#### 示例 C：文生视频
+
+文生视频示例默认使用 `/openapi/v2/seedance-v1.5-pro/text-to-video`。如果你想切换到别的文生视频模型，再用 `-path` 或 `RUNNINGHUB_TEXT_TO_VIDEO_PATH` 覆盖：
+
+默认 payload 已包含 `duration`、`aspectRatio`、`resolution`、`generateAudio` 这些常见字段；其中 `generateAudio` 需要传字符串值，例如 `"false"`。
+
+```bash
+go run ./examples/text_to_video \
+	-payload-file ./examples/text_to_video/payload.example.json
+```
+
+任务成功后，示例会把 `result.json` 和下载后的视频保存到 `./examples/text_to_video/output/`。
+
+如果你想覆盖默认模型路径：
+
+```bash
+go run ./examples/text_to_video \
+	-path /openapi/v2/your-text-to-video-model
+```
+
+或者：
+
+```bash
+# PowerShell
+$env:RUNNINGHUB_TEXT_TO_VIDEO_PATH="/openapi/v2/your-text-to-video-model"
+
+# bash
+export RUNNINGHUB_TEXT_TO_VIDEO_PATH="/openapi/v2/your-text-to-video-model"
+```
+
+#### 示例 D：任意场景先预览价格，不提交任务
+
+```bash
+go run ./examples/text_to_video \
+	-payload-file ./examples/text_to_video/payload.example.json \
+	-preview
+```
+
+#### 示例 E：图生视频手动传可访问 URL
+
+如果你已经有公网可访问的图片 URL，也可以直接传 `-image-url`：
+
+```bash
+go run ./examples/image_to_video \
+	-path /openapi/v2/vidu/image-to-video-q3-pro-fast \
+	-payload-file ./examples/image_to_video/payload.example.json \
+	-image-url https://your-public-image-url
+```
+
+各独立示例支持的主要参数：
+
+- `-api-key`：也可不传，默认读取环境变量 `RUNNINGHUB_API_KEY`
+- `-path`：标准模型接口路径，支持完整路径或 v2 相对路径
+- `-payload`：直接传 JSON 字符串
+- `-payload-file`：从 JSON 文件读取请求体
+- `-upload-file`：仅图生视频示例支持，先上传本地图片
+- `-image-url`：仅图生视频示例支持，直接传公网可访问图片 URL
+- `-output-dir`：结果 JSON 和下载后的图片/视频保存目录
+- `-preview`：只调用价格预览接口
+- `-poll-interval`：轮询间隔，默认 2 秒
+- `-timeout`：整体超时，默认 5 分钟
+- `RUNNINGHUB_TEXT_TO_IMAGE_PATH`：可选，用来覆盖文生图示例默认路径 `/openapi/v2/seedream-v4/text-to-image`
+- `RUNNINGHUB_TEXT_TO_VIDEO_PATH`：可选，用来覆盖文生视频示例默认路径 `/openapi/v2/seedance-v1.5-pro/text-to-video`
+
 ### 1) 初始化 Client
 
 ```go
@@ -191,6 +317,8 @@ fmt.Println(price.PriceText, price.EstimatedPrice, price.Currency)
 
 - `RunStandardModel(ctx, path, req)`：调用任意 `POST /openapi/v2/...` 模型端点
 - `PricePreview(ctx, modelPath, req)`：调用 `/openapi/v2/price-preview/...`
+- `DownloadFile(ctx, fileURL, destPath)`：把图片/视频 URL 下载到本地文件
+- `DownloadTaskResults(ctx, task, outputDir)`：批量下载任务结果里的所有 URL 到本地目录
 
 ## 错误处理
 

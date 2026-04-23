@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -11,6 +13,12 @@ func normalizeOpenAPIV2Path(path string) (string, error) {
 	p := strings.TrimSpace(path)
 	if p == "" {
 		return "", errors.New("empty path")
+	}
+	if u, err := url.Parse(p); err == nil && u.Scheme != "" && u.Host != "" {
+		if u.Path == "" {
+			return "", errors.New("empty path")
+		}
+		p = u.Path
 	}
 	if !strings.HasPrefix(p, "/") {
 		p = "/" + p
@@ -38,7 +46,32 @@ func (c *Client) RunStandardModel(ctx context.Context, path string, req any) (*Q
 	if err := c.doJSON(ctx, http.MethodPost, p, nil, nil, req, &out); err != nil {
 		return nil, err
 	}
+	if err := standardModelResponseError(&out); err != nil {
+		return nil, err
+	}
 	return &out, nil
+}
+
+func standardModelResponseError(out *QueryV2Response) error {
+	if out == nil {
+		return nil
+	}
+	if out.TaskID != "" {
+		return nil
+	}
+	if out.ErrorCode == "" && out.ErrorMessage == "" {
+		return nil
+	}
+
+	code, err := strconv.Atoi(out.ErrorCode)
+	if err != nil {
+		code = 0
+	}
+	message := out.ErrorMessage
+	if message == "" {
+		message = out.ErrorCode
+	}
+	return &APIError{Code: code, Message: message, Details: out}
 }
 
 type PricePreviewResponse struct {
