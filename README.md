@@ -39,6 +39,8 @@ go get github.com/difyz9/runninghub-sdk-go
 - `examples/ai_app/payload.example.json`
 - `examples/text_to_image/main.go`
 - `examples/text_to_image/payload.example.json`
+- `examples/image_edit/main.go`
+- `examples/image_edit/payload.example.json`
 - `examples/image_to_video/main.go`
 - `examples/image_to_video/payload.example.json`
 - `examples/text_to_video/main.go`
@@ -53,6 +55,8 @@ $env:RUNNINGHUB_API_KEY="你的 API Key"
 # bash
 export RUNNINGHUB_API_KEY="你的 API Key"
 ```
+
+标准模型 API 目前仅支持企业级-共享 API Key。
 
 #### 示例 A：工作流
 
@@ -118,7 +122,27 @@ $env:RUNNINGHUB_TEXT_TO_IMAGE_PATH="/openapi/v2/your-text-to-image-model"
 export RUNNINGHUB_TEXT_TO_IMAGE_PATH="/openapi/v2/your-text-to-image-model"
 ```
 
-#### 示例 D：图生视频
+#### 示例 D：图片编辑
+
+图片编辑示例默认使用 `/openapi/v2/rhart-image-n-pro-official/edit`。这个场景既可以直接传公网 URL，也可以先上传本地图片，再把 `download_url` 自动写进 `imageUrls[0]`。
+
+```bash
+go run ./examples/image_edit \
+	-payload-file ./examples/image_edit/payload.example.json \
+	-upload-file ./input.png
+```
+
+任务成功后，示例会把 `result.json` 和下载后的图片保存到 `./examples/image_edit/output/`。
+
+如果你已经有公网可访问的图片 URL，也可以直接传：
+
+```bash
+go run ./examples/image_edit \
+	-payload-file ./examples/image_edit/payload.example.json \
+	-image-url https://your-public-image-url
+```
+
+#### 示例 E：图生视频
 
 这个场景最容易踩坑的是 `imageUrl` 不可访问。优先用 `-upload-file`，让示例先上传本地图，再自动把 `download_url` 写进请求体。
 
@@ -131,7 +155,7 @@ go run ./examples/image_to_video \
 
 任务成功后，示例会把 `result.json` 和下载后的视频保存到 `./examples/image_to_video/output/`。
 
-#### 示例 E：文生视频
+#### 示例 F：文生视频
 
 文生视频示例默认使用 `/openapi/v2/seedance-v1.5-pro/text-to-video`。如果你想切换到别的文生视频模型，再用 `-path` 或 `RUNNINGHUB_TEXT_TO_VIDEO_PATH` 覆盖：
 
@@ -161,7 +185,7 @@ $env:RUNNINGHUB_TEXT_TO_VIDEO_PATH="/openapi/v2/your-text-to-video-model"
 export RUNNINGHUB_TEXT_TO_VIDEO_PATH="/openapi/v2/your-text-to-video-model"
 ```
 
-#### 示例 F：任意场景先预览价格，不提交任务
+#### 示例 G：任意场景先预览价格，不提交任务
 
 ```bash
 go run ./examples/text_to_video \
@@ -169,7 +193,7 @@ go run ./examples/text_to_video \
 	-preview
 ```
 
-#### 示例 G：图生视频手动传可访问 URL
+#### 示例 H：图生视频手动传可访问 URL
 
 如果你已经有公网可访问的图片 URL，也可以直接传 `-image-url`：
 
@@ -186,8 +210,8 @@ go run ./examples/image_to_video \
 - `-path`：标准模型接口路径，支持完整路径或 v2 相对路径
 - `-payload`：直接传 JSON 字符串
 - `-payload-file`：从 JSON 文件读取请求体
-- `-upload-file`：仅图生视频示例支持，先上传本地图片
-- `-image-url`：仅图生视频示例支持，直接传公网可访问图片 URL
+- `-upload-file`：图生视频、图片编辑示例支持，先上传本地图片
+- `-image-url`：图生视频、图片编辑示例支持，直接传公网可访问图片 URL
 - `-output-dir`：结果 JSON 和下载后的图片/视频保存目录
 - `-preview`：只调用价格预览接口
 - `-poll-interval`：轮询间隔，默认 2 秒
@@ -239,38 +263,36 @@ func main() {
 SDK 提供通用方法：
 
 - `RunStandardModel(ctx, path, req)`：提交任意标准模型任务
+- `WaitForTask(ctx, taskID, pollInterval)`：轮询直到任务进入终态
 - `QueryTaskV2(ctx, taskID)`：查询任务结果
 
 ```go
 // 这里只演示请求体形状；具体字段以 RunningHub 文档为准。
-task, err := c.RunStandardModel(ctx, "/openapi/v2/vidu/image-to-video-q3-pro-fast", map[string]any{
-	"prompt":   "女孩缓缓拿起茶杯喝茶...",
-	"imageUrl": "https://www.runninghub.cn/view?filename=...",
-	"duration": "5",
-	"resolution": "720p",
-	"audio": true,
+task, err := c.RunStandardModel(ctx, "/openapi/v2/rhart-image-n-pro-official/edit", map[string]any{
+	"imageUrls": []string{"https://example.com/image.png"},
+	"prompt":    "海边沙滩变成夏日祭典现场，风格欢乐卡通，色彩缤纷。",
+	"resolution": "1k",
+	"aspectRatio": "3:4",
 })
 if err != nil {
 	panic(err)
 }
 
-// 轮询（示例：简单 sleep 轮询；你也可以用更稳健的 backoff）
-for {
-	out, err := c.QueryTaskV2(ctx, task.TaskID)
-	if err != nil {
-		panic(err)
-	}
-	if out.Status == "SUCCESS" {
-		// out.Results: [{url, outputType, text?}, ...]
-		fmt.Println("results=", out.Results)
-		break
-	}
-	if out.Status == "FAILED" {
-		panic(fmt.Errorf("task failed: %s %s", out.ErrorCode, out.ErrorMessage))
-	}
-	time.Sleep(2 * time.Second)
+out, err := c.WaitForTask(ctx, task.TaskID, 2*time.Second)
+if err != nil {
+	panic(err)
 }
+if out.Status == "FAILED" {
+	panic(fmt.Errorf("task failed: %s %s", out.ErrorCode, out.ErrorMessage))
+}
+fmt.Println("results=", out.Results)
 ```
+
+对于图片编辑这类依赖输入图片的模型，`imageUrls` 支持三种方式：
+
+- 直接传公网可访问 URL
+- 直接传 Base64 Data URI
+- 先调用 `UploadBinaryFile` / `UploadBinaryReader` 上传本地文件，再把返回的 `download_url` 填进请求体
 
 ### 2.1) 工作流：提交任务 + 查询结果
 
