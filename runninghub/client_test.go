@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestAccountStatus_UsesApikeyField(t *testing.T) {
@@ -196,6 +197,284 @@ func TestQueryTaskV2(t *testing.T) {
 	}
 	if len(q.Results) != 1 {
 		t.Fatalf("Results=%d", len(q.Results))
+	}
+}
+
+func TestRunAIApp(t *testing.T) {
+	usePersonalQueue := false
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/openapi/v2/run/ai-app/2016796569449795585" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer testkey" {
+			t.Fatalf("Authorization=%q", got)
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		nodeInfoList, ok := body["nodeInfoList"].([]any)
+		if !ok || len(nodeInfoList) != 2 {
+			t.Fatalf("nodeInfoList=%#v", body["nodeInfoList"])
+		}
+		if body["instanceType"] != "default" {
+			t.Fatalf("instanceType=%v", body["instanceType"])
+		}
+		if body["usePersonalQueue"] != false {
+			t.Fatalf("usePersonalQueue=%#v", body["usePersonalQueue"])
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"taskId":       "2013508786110730241",
+			"status":       "RUNNING",
+			"errorCode":    "",
+			"errorMessage": "",
+			"results":      nil,
+			"clientId":     "f828b9af25161bc066ef152db7b29ccc",
+			"promptTips":   "{\"result\":true}",
+		})
+	}))
+	defer srv.Close()
+
+	c, err := New("testkey", WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := c.RunAIApp(context.Background(), "2016796569449795585", RunAIAppRequest{
+		NodeInfoList: []AIAppNodeInfo{
+			{NodeID: "41", FieldName: "select", FieldValue: "7", Description: "设置比例"},
+			{NodeID: "50", FieldName: "text", FieldValue: "润色这段话", Description: "输入文本"},
+		},
+		InstanceType:     "default",
+		UsePersonalQueue: &usePersonalQueue,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.TaskID != "2013508786110730241" {
+		t.Fatalf("TaskID=%q", resp.TaskID)
+	}
+	if resp.Status != "RUNNING" {
+		t.Fatalf("Status=%q", resp.Status)
+	}
+	if resp.ClientID == "" {
+		t.Fatal("expected client ID")
+	}
+	if resp.PromptTips == "" {
+		t.Fatal("expected prompt tips")
+	}
+}
+
+func TestRunAIApp_FullPath(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/openapi/v2/run/ai-app/2016796569449795585" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"taskId":       "t-aiapp",
+			"status":       "RUNNING",
+			"errorCode":    "",
+			"errorMessage": "",
+			"results":      nil,
+			"clientId":     "c",
+			"promptTips":   "",
+		})
+	}))
+	defer srv.Close()
+
+	c, err := New("testkey", WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := c.RunAIApp(context.Background(), "/openapi/v2/run/ai-app/2016796569449795585", RunAIAppRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.TaskID != "t-aiapp" {
+		t.Fatalf("TaskID=%q", resp.TaskID)
+	}
+}
+
+func TestRunWorkflow(t *testing.T) {
+	addMetadata := true
+	usePersonalQueue := false
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/openapi/v2/run/workflow/2037060865681264641" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer testkey" {
+			t.Fatalf("Authorization=%q", got)
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body["addMetadata"] != true {
+			t.Fatalf("addMetadata=%#v", body["addMetadata"])
+		}
+		if body["instanceType"] != "default" {
+			t.Fatalf("instanceType=%v", body["instanceType"])
+		}
+		if body["usePersonalQueue"] != false {
+			t.Fatalf("usePersonalQueue=%#v", body["usePersonalQueue"])
+		}
+		nodeInfoList, ok := body["nodeInfoList"].([]any)
+		if !ok || len(nodeInfoList) != 0 {
+			t.Fatalf("nodeInfoList=%#v", body["nodeInfoList"])
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"taskId":       "2013508786110730241",
+			"status":       "RUNNING",
+			"errorCode":    "",
+			"errorMessage": "",
+			"results":      nil,
+			"clientId":     "f828b9af25161bc066ef152db7b29ccc",
+			"promptTips":   "{\"result\":true}",
+		})
+	}))
+	defer srv.Close()
+
+	c, err := New("testkey", WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := c.RunWorkflow(context.Background(), "2037060865681264641", RunWorkflowRequest{
+		AddMetadata:      &addMetadata,
+		NodeInfoList:     []WorkflowNodeInfo{},
+		InstanceType:     "default",
+		UsePersonalQueue: &usePersonalQueue,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.TaskID != "2013508786110730241" {
+		t.Fatalf("TaskID=%q", resp.TaskID)
+	}
+	if resp.Status != "RUNNING" {
+		t.Fatalf("Status=%q", resp.Status)
+	}
+}
+
+func TestRunWorkflow_FullPath(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/openapi/v2/run/workflow/2037060865681264641" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"taskId":       "t-workflow",
+			"status":       "RUNNING",
+			"errorCode":    "",
+			"errorMessage": "",
+			"results":      nil,
+			"clientId":     "c",
+			"promptTips":   "",
+		})
+	}))
+	defer srv.Close()
+
+	c, err := New("testkey", WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := c.RunWorkflow(context.Background(), "/openapi/v2/run/workflow/2037060865681264641", RunWorkflowRequest{NodeInfoList: []WorkflowNodeInfo{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.TaskID != "t-workflow" {
+		t.Fatalf("TaskID=%q", resp.TaskID)
+	}
+}
+
+func TestWaitForTask(t *testing.T) {
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/openapi/v2/query" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		calls++
+		status := "RUNNING"
+		results := any(nil)
+		if calls >= 2 {
+			status = "SUCCESS"
+			results = []map[string]any{{"url": "https://example.com/x", "nodeId": "2", "outputType": "png"}}
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"taskId":       "t-wait",
+			"status":       status,
+			"errorCode":    "",
+			"errorMessage": "",
+			"results":      results,
+			"clientId":     "c",
+			"promptTips":   "",
+		})
+	}))
+	defer srv.Close()
+
+	c, err := New("testkey", WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := c.WaitForTask(context.Background(), "t-wait", 10*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Status != "SUCCESS" {
+		t.Fatalf("Status=%q", out.Status)
+	}
+	if calls < 2 {
+		t.Fatalf("calls=%d", calls)
+	}
+	if len(out.Results) != 1 || out.Results[0].NodeID != "2" {
+		t.Fatalf("Results=%#v", out.Results)
+	}
+}
+
+func TestWaitForTask_ContextTimeout(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/openapi/v2/query" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"taskId":       "t-timeout",
+			"status":       "RUNNING",
+			"errorCode":    "",
+			"errorMessage": "",
+			"results":      nil,
+			"clientId":     "c",
+			"promptTips":   "",
+		})
+	}))
+	defer srv.Close()
+
+	c, err := New("testkey", WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+
+	_, err = c.WaitForTask(ctx, "t-timeout", 50*time.Millisecond)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err=%v", err)
 	}
 }
 

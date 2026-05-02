@@ -24,6 +24,38 @@ type UploadBinaryData struct {
 	Size        string `json:"size"`
 }
 
+// --- AI App v2 ---
+
+type AIAppNodeInfo struct {
+	NodeID      string `json:"nodeId"`
+	FieldName   string `json:"fieldName"`
+	FieldValue  any    `json:"fieldValue"`
+	Description string `json:"description,omitempty"`
+}
+
+type RunAIAppRequest struct {
+	NodeInfoList     []AIAppNodeInfo `json:"nodeInfoList"`
+	InstanceType     string          `json:"instanceType,omitempty"`
+	UsePersonalQueue *bool           `json:"usePersonalQueue,omitempty"`
+	RetainSeconds    *int            `json:"retainSeconds,omitempty"`
+	WebhookURL       string          `json:"webhookUrl,omitempty"`
+}
+
+type RunAIAppResponse = QueryV2Response
+
+type WorkflowNodeInfo = AIAppNodeInfo
+
+type RunWorkflowRequest struct {
+	AddMetadata      *bool              `json:"addMetadata,omitempty"`
+	NodeInfoList     []WorkflowNodeInfo `json:"nodeInfoList"`
+	InstanceType     string             `json:"instanceType,omitempty"`
+	UsePersonalQueue *bool              `json:"usePersonalQueue,omitempty"`
+	RetainSeconds    *int               `json:"retainSeconds,omitempty"`
+	WebhookURL       string             `json:"webhookUrl,omitempty"`
+}
+
+type RunWorkflowResponse = QueryV2Response
+
 // --- Query v2 ---
 
 type QueryV2Request struct {
@@ -32,6 +64,7 @@ type QueryV2Request struct {
 
 type QueryV2ResultItem struct {
 	URL        string `json:"url"`
+	NodeID     string `json:"nodeId,omitempty"`
 	OutputType string `json:"outputType"`
 	Text       string `json:"text,omitempty"`
 }

@@ -33,6 +33,10 @@ go get github.com/difyz9/runninghub-sdk-go
 
 仓库内已经提供可直接执行的示例程序：
 
+- `examples/workflow/main.go`
+- `examples/workflow/payload.example.json`
+- `examples/ai_app/main.go`
+- `examples/ai_app/payload.example.json`
 - `examples/text_to_image/main.go`
 - `examples/text_to_image/payload.example.json`
 - `examples/image_to_video/main.go`
@@ -50,7 +54,43 @@ $env:RUNNINGHUB_API_KEY="你的 API Key"
 export RUNNINGHUB_API_KEY="你的 API Key"
 ```
 
-#### 示例 A：文生图
+#### 示例 A：工作流
+
+工作流示例会提交 `/openapi/v2/run/workflow/{workflowId}`，随后使用 `/openapi/v2/query` 轮询结果。
+
+```bash
+go run ./examples/workflow \
+	-workflow-id 2037060865681264641 \
+	-payload-file ./examples/workflow/payload.example.json
+```
+
+如果你需要直接传入 JSON：
+
+```bash
+go run ./examples/workflow \
+	-workflow-id 2037060865681264641 \
+	-payload '{"addMetadata":true,"nodeInfoList":[],"instanceType":"default","usePersonalQueue":false}'
+```
+
+#### 示例 B：AI App
+
+AI App 示例会提交 `/openapi/v2/run/ai-app/{appId}`，随后使用 `/openapi/v2/query` 轮询结果。
+
+```bash
+go run ./examples/ai_app \
+	-app-id 2016796569449795585 \
+	-payload-file ./examples/ai_app/payload.example.json
+```
+
+如果你需要直接传入 JSON：
+
+```bash
+go run ./examples/ai_app \
+	-app-id 2016796569449795585 \
+	-payload '{"nodeInfoList":[{"nodeId":"50","fieldName":"text","fieldValue":"润色这段话"}]}'
+```
+
+#### 示例 C：文生图
 
 文生图示例默认使用 `/openapi/v2/seedream-v4/text-to-image`。如果你想切换到别的文生图模型，再用 `-path` 或 `RUNNINGHUB_TEXT_TO_IMAGE_PATH` 覆盖：
 
@@ -78,7 +118,7 @@ $env:RUNNINGHUB_TEXT_TO_IMAGE_PATH="/openapi/v2/your-text-to-image-model"
 export RUNNINGHUB_TEXT_TO_IMAGE_PATH="/openapi/v2/your-text-to-image-model"
 ```
 
-#### 示例 B：图生视频
+#### 示例 D：图生视频
 
 这个场景最容易踩坑的是 `imageUrl` 不可访问。优先用 `-upload-file`，让示例先上传本地图，再自动把 `download_url` 写进请求体。
 
@@ -91,7 +131,7 @@ go run ./examples/image_to_video \
 
 任务成功后，示例会把 `result.json` 和下载后的视频保存到 `./examples/image_to_video/output/`。
 
-#### 示例 C：文生视频
+#### 示例 E：文生视频
 
 文生视频示例默认使用 `/openapi/v2/seedance-v1.5-pro/text-to-video`。如果你想切换到别的文生视频模型，再用 `-path` 或 `RUNNINGHUB_TEXT_TO_VIDEO_PATH` 覆盖：
 
@@ -121,7 +161,7 @@ $env:RUNNINGHUB_TEXT_TO_VIDEO_PATH="/openapi/v2/your-text-to-video-model"
 export RUNNINGHUB_TEXT_TO_VIDEO_PATH="/openapi/v2/your-text-to-video-model"
 ```
 
-#### 示例 D：任意场景先预览价格，不提交任务
+#### 示例 F：任意场景先预览价格，不提交任务
 
 ```bash
 go run ./examples/text_to_video \
@@ -129,7 +169,7 @@ go run ./examples/text_to_video \
 	-preview
 ```
 
-#### 示例 E：图生视频手动传可访问 URL
+#### 示例 G：图生视频手动传可访问 URL
 
 如果你已经有公网可访问的图片 URL，也可以直接传 `-image-url`：
 
@@ -232,7 +272,89 @@ for {
 }
 ```
 
-### 2.1) 端到端示例：上传本地文件 → 标准模型调用 → 查询结果
+### 2.1) 工作流：提交任务 + 查询结果
+
+SDK 提供：
+
+- `RunWorkflow(ctx, workflowID, req)`：提交工作流任务
+- `WaitForTask(ctx, taskID, pollInterval)`：轮询直到任务进入终态
+- `QueryTaskV2(ctx, taskID)`：查询任务结果
+
+```go
+addMetadata := true
+usePersonalQueue := false
+
+resp, err := c.RunWorkflow(ctx, "2037060865681264641", runninghub.RunWorkflowRequest{
+	AddMetadata:      &addMetadata,
+	NodeInfoList:     []runninghub.WorkflowNodeInfo{},
+	InstanceType:     "default",
+	UsePersonalQueue: &usePersonalQueue,
+})
+if err != nil {
+	panic(err)
+}
+
+out, err := c.WaitForTask(ctx, resp.TaskID, 2*time.Second)
+if err != nil {
+	panic(err)
+}
+if out.Status == "FAILED" {
+	panic(fmt.Errorf("task failed: %s %s", out.ErrorCode, out.ErrorMessage))
+}
+fmt.Println("results=", out.Results)
+```
+
+`WorkflowNodeInfo` 复用了通用节点映射结构，`FieldValue` 使用 `any`，因此除了字符串，也可以传布尔、数字、数组、对象，以及文件 URL 或 Base64 Data URI。
+
+### 2.2) AI App：提交任务 + 查询结果
+
+SDK 提供：
+
+- `RunAIApp(ctx, appID, req)`：提交 AI App 任务
+- `QueryTaskV2(ctx, taskID)`：查询任务结果
+
+```go
+usePersonalQueue := false
+
+resp, err := c.RunAIApp(ctx, "2016796569449795585", runninghub.RunAIAppRequest{
+	NodeInfoList: []runninghub.AIAppNodeInfo{
+		{
+			NodeID:      "41",
+			FieldName:   "select",
+			FieldValue:  "7",
+			Description: "设置比例",
+		},
+		{
+			NodeID:      "50",
+			FieldName:   "text",
+			FieldValue:  "润色这段话",
+			Description: "输入文本",
+		},
+	},
+	InstanceType:     "default",
+	UsePersonalQueue: &usePersonalQueue,
+})
+if err != nil {
+	panic(err)
+}
+
+for {
+	out, err := c.QueryTaskV2(ctx, resp.TaskID)
+	if err != nil {
+		panic(err)
+	}
+	if out.Status == "SUCCESS" {
+		fmt.Println("results=", out.Results)
+		break
+	}
+	if out.Status == "FAILED" {
+		panic(fmt.Errorf("task failed: %s %s", out.ErrorCode, out.ErrorMessage))
+	}
+	time.Sleep(2 * time.Second)
+}
+```
+
+### 2.3) 端到端示例：上传本地文件 → 标准模型调用 → 查询结果
 
 很多标准模型的输入需要一个可访问的 `imageUrl` / `videoUrl` / `audioUrl`。
 通常你可以先把本地文件上传到 RunningHub，再把返回的 URL 作为后续模型入参（**具体以对应模型文档的字段为准**）。
@@ -258,7 +380,51 @@ if err != nil {
 	panic(err)
 }
 fmt.Println(out.Status, out.Results)
+
+// 如果某个 AI App 节点字段需要文件 URL，也可以把上传返回的 download_url
+// 放进 nodeInfoList。
+_, _ = c.RunAIApp(ctx, "2016796569449795585", runninghub.RunAIAppRequest{
+	NodeInfoList: []runninghub.AIAppNodeInfo{
+		{
+			NodeID:     "12",
+			FieldName:  "imageUrl",
+			FieldValue: up.DownloadURL,
+		},
+	},
+})
 ```
+
+### 2.4) 文件上传：公共 URL / Base64 / RH 上传接口
+
+资源字段通常支持三种方式，具体字段名以对应模型或 AI App 工作流定义为准：
+
+- 直接传公共 URL，例如 `https://example.com/image.png`
+- 直接传 Base64 Data URI，例如 `data:image/png;base64,...`
+- 先调用 `UploadBinaryFile` 或 `UploadBinaryReader` 上传本地文件，再使用返回的 `download_url`
+
+```go
+up, err := c.UploadBinaryFile(ctx, "./image.png")
+if err != nil {
+	panic(err)
+}
+
+req := runninghub.RunAIAppRequest{
+	NodeInfoList: []runninghub.AIAppNodeInfo{
+		{
+			NodeID:     "12",
+			FieldName:  "imageUrl",
+			FieldValue: up.DownloadURL,
+		},
+	},
+}
+
+_, err = c.RunAIApp(ctx, "2016796569449795585", req)
+if err != nil {
+	panic(err)
+}
+```
+
+上传接口返回的 `download_url` 有效期为 1 天；任务结果里的 `results[].url` 有效期为 24 小时，建议任务完成后尽快下载或转存。
 
 ### 3) 标准模型 API：价格预览
 
@@ -295,6 +461,8 @@ fmt.Println(price.PriceText, price.EstimatedPrice, price.Currency)
 - 任务查询
 
   - `QueryTaskV2(ctx, taskID)` → `POST /openapi/v2/query`（注意：该接口返回 task 对象本身，不是 envelope）
+	- `RunWorkflow(ctx, workflowID, req)` → `POST /openapi/v2/run/workflow/{workflowID}`
+	- `RunAIApp(ctx, appID, req)` → `POST /openapi/v2/run/ai-app/{appID}`
 
 - 账户 / 队列 / apikey
 
@@ -317,6 +485,7 @@ fmt.Println(price.PriceText, price.EstimatedPrice, price.Currency)
 
 - `RunStandardModel(ctx, path, req)`：调用任意 `POST /openapi/v2/...` 模型端点
 - `PricePreview(ctx, modelPath, req)`：调用 `/openapi/v2/price-preview/...`
+- `WaitForTask(ctx, taskID, pollInterval)`：轮询 `QueryTaskV2` 直到 `SUCCESS`、`FAILED` 或 `CANCELLED`
 - `DownloadFile(ctx, fileURL, destPath)`：把图片/视频 URL 下载到本地文件
 - `DownloadTaskResults(ctx, task, outputDir)`：批量下载任务结果里的所有 URL 到本地目录
 
