@@ -1,0 +1,8 @@
+apiKey: "your-runninghub-api-key"
+modelPath: "/openapi/v2/seedream-v4/text-to-image"
+payloadFile: "./examples/text_to_image/payload.example.json"
+outputDir: "./examples/text_to_image/output"
+pollInterval: "2s"
+timeout: "5m"
+previewOnly: false
+webhookUrl: "https://www.example.com/webhook"
