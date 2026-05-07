@@ -1,0 +1,10 @@
+apiKey: "c4dbb7471a1649219a6a3cbe7827df47"
+appId: ""
+publicWebhookUrl: ""
+listenAddr: ":8080"
+webhookPath: "/webhook"
+timeout: "15m"
+log:
+  console: true
+  file: true
+  filePath: "./webhook-log.log"

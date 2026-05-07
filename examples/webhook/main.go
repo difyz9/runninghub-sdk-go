@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -16,29 +15,26 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/goccy/go-yaml"
 
 	"github.com/difyz9/runninghub-sdk-go/runninghub"
 )
 
-const defaultPayloadFile = "./examples/webhook/payload.example.json"
+const defaultConfigFile = "./config.yaml"
+const defaultPayloadFile = "./payload.example.json"
 
 func main() {
-	var (
-		apiKey           = flag.String("api-key", os.Getenv("RUNNINGHUB_API_KEY"), "RunningHub API key; defaults to RUNNINGHUB_API_KEY")
-		appID            = flag.String("app-id", "", "RunningHub AI App ID; when set together with -public-webhook-url, the example will submit a task")
-		publicWebhookURL = flag.String("public-webhook-url", "", "public webhook callback URL exposed to RunningHub, for example https://example.com/webhook")
-		listenAddr       = flag.String("listen", ":8080", "local HTTP listen address")
-		webhookPath      = flag.String("path", "/webhook", "local HTTP path for receiving webhook callbacks")
-		payload          = flag.String("payload", "", "JSON request body string used when submitting an AI App task")
-		payloadFile      = flag.String("payload-file", defaultPayloadFile, "path to JSON request body file used when submitting an AI App task")
-		logConsole       = flag.Bool("log-console", true, "write webhook logs to stdout")
-		logFile          = flag.Bool("log-file", true, "write webhook logs to a file")
-		logFilePath      = flag.String("log-file-path", "./examples/webhook/webhook.log", "path to the webhook log file")
-		timeout          = flag.Duration("timeout", 15*time.Minute, "time to wait for the first webhook callback in submit mode")
-	)
-	flag.Parse()
+	config, err := LoadConfig(defaultConfigFile)
+	if err != nil {
+		exitf("load config: %v", err)
+	}
 
-	logger, closeLogger, err := newLogger(*logConsole, *logFile, *logFilePath)
+	timeout, err := config.TimeoutDuration()
+	if err != nil {
+		exitf("parse timeout from config: %v", err)
+	}
+
+	logger, closeLogger, err := newLogger(config.Log.Console, config.Log.File, config.Log.FilePath)
 	if err != nil {
 		exitf("configure logger: %v", err)
 	}
@@ -51,7 +47,7 @@ func main() {
 
 	router := gin.New()
 	router.Use(requestLogger(logger), gin.Recovery())
-	router.POST(*webhookPath, func(c *gin.Context) {
+	router.POST(config.WebhookPath, func(c *gin.Context) {
 		raw, err := c.GetRawData()
 		if err != nil {
 			logger.Printf("read webhook body failed: %v", err)
@@ -81,13 +77,14 @@ func main() {
 	})
 
 	server := &http.Server{
-		Addr:              *listenAddr,
+		Addr:              config.ListenAddr,
 		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	go func() {
-		logger.Printf("listening on http://127.0.0.1%s%s", *listenAddr, *webhookPath)
+		logger.Printf("using config file: %s", config.Path)
+		logger.Printf("listening on http://127.0.0.1%s%s", config.ListenAddr, config.WebhookPath)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			exitf("webhook server failed: %v", err)
 		}
@@ -99,31 +96,31 @@ func main() {
 		_ = server.Shutdown(shutdownCtx)
 	}()
 
-	if *appID == "" || *publicWebhookURL == "" {
-		logger.Printf("receiver mode only. expose http://127.0.0.1%s%s through a public tunnel and then rerun with -app-id and -public-webhook-url.", *listenAddr, *webhookPath)
+	if config.AppID == "" || config.PublicWebhookURL == "" {
+		logger.Printf("receiver mode only. expose http://127.0.0.1%s%s through a public tunnel and then rerun with -app-id and -public-webhook-url.", config.ListenAddr, config.WebhookPath)
 		waitForInterrupt()
 		return
 	}
 
-	if *apiKey == "" {
+	if config.APIKey == "" {
 		exitf("missing API key: set -api-key or RUNNINGHUB_API_KEY")
 	}
 
-	req, err := loadPayload(*payload, *payloadFile)
+	req, err := loadPayload(defaultPayloadFile)
 	if err != nil {
 		exitf("load payload: %v", err)
 	}
-	req.WebhookURL = *publicWebhookURL
+	req.WebhookURL = config.PublicWebhookURL
 
-	client, err := runninghub.New(*apiKey)
+	client, err := runninghub.New(config.APIKey)
 	if err != nil {
 		exitf("create client: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	resp, err := client.RunAIApp(ctx, *appID, req)
+	resp, err := client.RunAIApp(ctx, config.AppID, req)
 	if err != nil {
 		exitWithSDKError(err)
 	}
@@ -185,23 +182,102 @@ func requestLogger(logger *log.Logger) gin.HandlerFunc {
 	}
 }
 
-func loadPayload(payload, payloadFile string) (runninghub.RunAIAppRequest, error) {
-	if payload != "" && payloadFile != "" {
-		return runninghub.RunAIAppRequest{}, errors.New("use either -payload or -payload-file, not both")
+type Config struct {
+	Path             string    `yaml:"-"`
+	APIKey           string    `yaml:"apiKey"`
+	AppID            string    `yaml:"appId"`
+	PublicWebhookURL string    `yaml:"publicWebhookUrl"`
+	ListenAddr       string    `yaml:"listenAddr"`
+	WebhookPath      string    `yaml:"webhookPath"`
+	Timeout          string    `yaml:"timeout"`
+	Log              LogConfig `yaml:"log"`
+}
+
+type LogConfig struct {
+	Console  bool   `yaml:"console"`
+	File     bool   `yaml:"file"`
+	FilePath string `yaml:"filePath"`
+}
+
+func NewDefaultConfig() *Config {
+	return &Config{
+		ListenAddr: ":8080",
+		WebhookPath: "/webhook",
+		Timeout:    "15m",
+		Log: LogConfig{
+			Console:  true,
+			File:     true,
+			FilePath: "./webhook.log",
+		},
+	}
+}
+
+func (c *Config) TimeoutDuration() (time.Duration, error) {
+	if c == nil {
+		return 0, errors.New("config cannot be nil")
+	}
+	if c.Timeout == "" {
+		return 15 * time.Minute, nil
+	}
+	return time.ParseDuration(c.Timeout)
+}
+
+func LoadConfig(configFile string) (*Config, error) {
+	if configFile == "" {
+		return nil, errors.New("config file path cannot be empty")
 	}
 
-	var raw []byte
-	switch {
-	case payload != "":
-		raw = []byte(payload)
-	case payloadFile != "":
-		b, err := os.ReadFile(payloadFile)
-		if err != nil {
-			return runninghub.RunAIAppRequest{}, err
+	if _, err := os.Stat(configFile); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
 		}
-		raw = b
-	default:
-		return runninghub.RunAIAppRequest{}, nil
+
+		config := NewDefaultConfig()
+		config.Path = configFile
+		if err := SaveConfig(config); err != nil {
+			return nil, err
+		}
+		return config, nil
+	}
+
+	raw, err := os.ReadFile(configFile)
+	if err != nil {
+		return nil, err
+	}
+
+	config := NewDefaultConfig()
+	if err := yaml.Unmarshal(raw, config); err != nil {
+		return nil, err
+	}
+	config.Path = configFile
+	return config, nil
+}
+
+func SaveConfig(config *Config) error {
+	if config == nil {
+		return errors.New("config cannot be nil")
+	}
+	if config.Path == "" {
+		return errors.New("config path cannot be empty")
+	}
+
+	if err := os.MkdirAll(filepath.Dir(config.Path), 0o755); err != nil {
+		return err
+	}
+
+	raw, err := yaml.Marshal(config)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(config.Path, raw, 0o644)
+}
+
+
+func loadPayload(payloadFile string) (runninghub.RunAIAppRequest, error) {
+	raw, err := os.ReadFile(payloadFile)
+	if err != nil {
+		return runninghub.RunAIAppRequest{}, err
 	}
 
 	var out runninghub.RunAIAppRequest
