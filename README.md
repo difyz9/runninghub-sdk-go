@@ -45,6 +45,8 @@ go get github.com/difyz9/runninghub-sdk-go
 - `examples/image_to_video/payload.example.json`
 - `examples/text_to_video/main.go`
 - `examples/text_to_video/payload.example.json`
+- `examples/webhook/main.go`
+- `examples/webhook/payload.example.json`
 
 先设置 API Key：
 
@@ -203,6 +205,40 @@ go run ./examples/image_to_video \
 	-payload-file ./examples/image_to_video/payload.example.json \
 	-image-url https://your-public-image-url
 ```
+
+#### 示例 I：Webhook 回调
+
+这个示例使用 Gin v1.12.0 实现，包含两部分：
+
+- 本地启动一个 HTTP 服务接收 RunningHub 的 webhook 回调
+- 当你同时提供 `-app-id` 和 `-public-webhook-url` 时，示例会提交 AI App 任务，并等待回调到达
+- 日志可分别控制是否输出到终端和文件
+
+先只启动本地接收服务：
+
+```bash
+cd ./examples/webhook && go run .
+```
+
+如果你使用 `ngrok`、`cloudflared tunnel` 或其他方式把本地 `/webhook` 暴露成公网地址，再把这个公网地址传给 RunningHub：
+
+```bash
+cd ./examples/webhook && go run . \
+	-app-id 2016796569449795585 \
+	-public-webhook-url https://your-domain.example/webhook \
+	-payload-file ./examples/webhook/payload.example.json
+```
+
+如果你想只写文件、不打印终端日志：
+
+```bash
+cd ./examples/webhook && go run . \
+	-log-console=false \
+	-log-file=true \
+	-log-file-path ./examples/webhook/webhook.log
+```
+
+收到回调后，示例会把回调 JSON 和请求日志写到配置的输出目标。回调体结构与 `/openapi/v2/query` 返回的任务结果一致，可以直接复用 SDK 中的 `QueryV2Response`。
 
 各独立示例支持的主要参数：
 
