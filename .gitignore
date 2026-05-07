@@ -16,7 +16,7 @@ pids
 *.pid.lock
 *.png
 *.jpg
-
+*.yaml
 
 # Coverage directory used by tools like istanbul
 coverage/
