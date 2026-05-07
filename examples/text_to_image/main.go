@@ -15,7 +15,6 @@ import (
 const defaultConfigFile = "./examples/text_to_image/config.yaml"
 const defaultPayloadFile = "./examples/text_to_image/payload.example.json"
 const defaultModelPathValue = "/openapi/v2/seedream-v4/text-to-image"
-const defaultWebhookURL = "https://www.vtranslink.com/webhook"
 
 func main() {
 	config, err := runninghub.LoadYAMLConfig[Config](defaultConfigFile)
@@ -40,7 +39,9 @@ func main() {
 	if err != nil {
 		exitf("load payload: %v", err)
 	}
-	reqBody["webhookUrl"] = config.WebhookURL
+	if config.WebhookURL != "" {
+		reqBody["webhookUrl"] = config.WebhookURL
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -84,9 +85,6 @@ func (c *Config) ApplyYAMLDefaults() {
 	}
 	if c.Timeout == "" {
 		c.Timeout = "5m"
-	}
-	if c.WebhookURL == "" {
-		c.WebhookURL = defaultWebhookURL
 	}
 }
 

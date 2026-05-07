@@ -101,7 +101,7 @@ go run ./examples/ai_app \
 
 文生图示例现在改成从 YAML 配置文件读取参数，配置加载逻辑由 SDK 内的 `runninghub.LoadYAMLConfig` 提供。
 
-先编辑 `examples/text_to_image/config.yaml`，填入你的 `apiKey`，按需修改模型路径、超时、输出目录和 webhook 回调地址：
+先编辑 `examples/text_to_image/config.yaml`，填入你的 `apiKey`，按需修改模型路径、超时、输出目录；如果你配置了 `webhookUrl`，提交时会自动携带该参数：
 
 ```yaml
 apiKey: "your-runninghub-api-key"
