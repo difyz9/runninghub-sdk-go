@@ -38,6 +38,7 @@ go get github.com/difyz9/runninghub-sdk-go
 - `examples/ai_app/main.go`
 - `examples/ai_app/payload.example.json`
 - `examples/text_to_image/main.go`
+- `examples/text_to_image/config.yaml`
 - `examples/text_to_image/payload.example.json`
 - `examples/image_edit/main.go`
 - `examples/image_edit/payload.example.json`
@@ -98,31 +99,28 @@ go run ./examples/ai_app \
 
 #### 示例 C：文生图
 
-文生图示例默认使用 `/openapi/v2/seedream-v4/text-to-image`。如果你想切换到别的文生图模型，再用 `-path` 或 `RUNNINGHUB_TEXT_TO_IMAGE_PATH` 覆盖：
+文生图示例现在改成从 YAML 配置文件读取参数，配置加载逻辑由 SDK 内的 `runninghub.LoadYAMLConfig` 提供。
+
+先编辑 `examples/text_to_image/config.yaml`，填入你的 `apiKey`，按需修改模型路径、超时、输出目录和 webhook 回调地址：
+
+```yaml
+apiKey: "your-runninghub-api-key"
+modelPath: "/openapi/v2/seedream-v4/text-to-image"
+payloadFile: "./examples/text_to_image/payload.example.json"
+outputDir: "./examples/text_to_image/output"
+pollInterval: "2s"
+timeout: "5m"
+previewOnly: false
+webhookUrl: "https://www.vtranslink.com/webhook"
+```
+
+然后直接运行：
 
 ```bash
-go run ./examples/text_to_image \
-	-payload-file ./examples/text_to_image/payload.example.json
+go run ./examples/text_to_image
 ```
 
 任务成功后，示例会把 `result.json` 和下载后的图片保存到 `./examples/text_to_image/output/`。
-
-如果你想覆盖默认模型路径：
-
-```bash
-go run ./examples/text_to_image \
-	-path /openapi/v2/your-text-to-image-model
-```
-
-或者：
-
-```bash
-# PowerShell
-$env:RUNNINGHUB_TEXT_TO_IMAGE_PATH="/openapi/v2/your-text-to-image-model"
-
-# bash
-export RUNNINGHUB_TEXT_TO_IMAGE_PATH="/openapi/v2/your-text-to-image-model"
-```
 
 #### 示例 D：图片编辑
 

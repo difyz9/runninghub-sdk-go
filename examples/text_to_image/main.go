@@ -4,69 +4,120 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/difyz9/runninghub-sdk-go/runninghub"
 )
 
+const defaultConfigFile = "./examples/text_to_image/config.yaml"
 const defaultPayloadFile = "./examples/text_to_image/payload.example.json"
 const defaultModelPathValue = "/openapi/v2/seedream-v4/text-to-image"
+const defaultWebhookURL = "https://www.vtranslink.com/webhook"
 
 func main() {
-	var (
-		apiKey       = flag.String("api-key", os.Getenv("RUNNINGHUB_API_KEY"), "RunningHub API key; defaults to RUNNINGHUB_API_KEY")
-		modelPath    = flag.String("path", defaultModelPath(), "text-to-image model path; defaults to RUNNINGHUB_TEXT_TO_IMAGE_PATH")
-		payload      = flag.String("payload", "", "JSON request body string")
-		payloadFile  = flag.String("payload-file", defaultPayloadFile, "path to JSON request body file")
-		outputDir    = flag.String("output-dir", "./examples/text_to_image/output", "directory to save result.json and downloaded outputs")
-		pollInterval = flag.Duration("poll-interval", 2*time.Second, "poll interval for QueryTaskV2")
-		timeout      = flag.Duration("timeout", 5*time.Minute, "overall request timeout")
-		previewOnly  = flag.Bool("preview", false, "only call PricePreview and exit")
-	)
-	flag.Parse()
-
-	if *apiKey == "" {
-		exitf("missing API key: set -api-key or RUNNINGHUB_API_KEY")
+	config, err := runninghub.LoadYAMLConfig[Config](defaultConfigFile)
+	if err != nil {
+		exitf("load config: %v", err)
 	}
 
-	reqBody, err := loadPayload(*payload, *payloadFile)
+	if config.APIKey == "" {
+		exitf("missing API key in config: %s", config.Path)
+	}
+
+	pollInterval, err := config.PollIntervalDuration()
+	if err != nil {
+		exitf("parse poll interval from config: %v", err)
+	}
+	timeout, err := config.TimeoutDuration()
+	if err != nil {
+		exitf("parse timeout from config: %v", err)
+	}
+
+	reqBody, err := loadPayload(config.PayloadFile)
 	if err != nil {
 		exitf("load payload: %v", err)
 	}
+	reqBody["webhookUrl"] = config.WebhookURL
 
-	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	client, err := runninghub.New(*apiKey)
+	client, err := runninghub.New(config.APIKey)
 	if err != nil {
 		exitf("create client: %v", err)
 	}
 
-	runTask(ctx, client, *modelPath, reqBody, *previewOnly, *pollInterval, *outputDir)
+	runTask(ctx, client, config.ModelPath, reqBody, config.PreviewOnly, pollInterval, config.OutputDir)
 }
 
-func loadPayload(payload, payloadFile string) (map[string]any, error) {
-	if payload != "" && payloadFile != "" {
-		return nil, errors.New("use either -payload or -payload-file, not both")
+type Config struct {
+	Path         string `yaml:"-"`
+	APIKey       string `yaml:"apiKey"`
+	ModelPath    string `yaml:"modelPath"`
+	PayloadFile  string `yaml:"payloadFile"`
+	OutputDir    string `yaml:"outputDir"`
+	PollInterval string `yaml:"pollInterval"`
+	Timeout      string `yaml:"timeout"`
+	PreviewOnly  bool   `yaml:"previewOnly"`
+	WebhookURL   string `yaml:"webhookUrl"`
+}
+
+func (c *Config) SetConfigPath(path string) {
+	c.Path = path
+}
+
+func (c *Config) ApplyYAMLDefaults() {
+	if c.ModelPath == "" {
+		c.ModelPath = defaultModelPathValue
+	}
+	if c.PayloadFile == "" {
+		c.PayloadFile = defaultPayloadFile
+	}
+	if c.OutputDir == "" {
+		c.OutputDir = "./examples/text_to_image/output"
+	}
+	if c.PollInterval == "" {
+		c.PollInterval = "2s"
+	}
+	if c.Timeout == "" {
+		c.Timeout = "5m"
+	}
+	if c.WebhookURL == "" {
+		c.WebhookURL = defaultWebhookURL
+	}
+}
+
+func (c *Config) PollIntervalDuration() (time.Duration, error) {
+	if c == nil {
+		return 0, errors.New("config cannot be nil")
+	}
+	if c.PollInterval == "" {
+		return 2 * time.Second, nil
+	}
+	return time.ParseDuration(c.PollInterval)
+}
+
+func (c *Config) TimeoutDuration() (time.Duration, error) {
+	if c == nil {
+		return 0, errors.New("config cannot be nil")
+	}
+	if c.Timeout == "" {
+		return 5 * time.Minute, nil
+	}
+	return time.ParseDuration(c.Timeout)
+}
+
+func loadPayload(payloadFile string) (map[string]any, error) {
+	if payloadFile == "" {
+		return nil, errors.New("payload file path cannot be empty")
 	}
 
-	var raw []byte
-	switch {
-	case payload != "":
-		raw = []byte(payload)
-	case payloadFile != "":
-		b, err := os.ReadFile(payloadFile)
-		if err != nil {
-			return nil, err
-		}
-		raw = b
-	default:
-		return map[string]any{}, nil
+	raw, err := os.ReadFile(payloadFile)
+	if err != nil {
+		return nil, err
 	}
 
 	out := map[string]any{}
@@ -175,11 +226,4 @@ func exitWithSDKError(err error) {
 func exitf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 	os.Exit(1)
-}
-
-func defaultModelPath() string {
-	if path := strings.TrimSpace(os.Getenv("RUNNINGHUB_TEXT_TO_IMAGE_PATH")); path != "" {
-		return path
-	}
-	return defaultModelPathValue
 }

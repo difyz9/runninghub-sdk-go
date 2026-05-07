@@ -3,7 +3,7 @@ module github.com/difyz9/runninghub-sdk-go/examples/webhook
 go 1.25.0
 
 require (
-	github.com/difyz9/runninghub-sdk-go v0.0.0
+	github.com/difyz9/runninghub-sdk-go v0.0.2
 	github.com/gin-gonic/gin v1.12.0
 	github.com/goccy/go-yaml v1.19.2
 )
@@ -38,5 +38,3 @@ require (
 	golang.org/x/text v0.34.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 )
-
-replace github.com/difyz9/runninghub-sdk-go => ../..

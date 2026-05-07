@@ -47,6 +47,13 @@ func main() {
 
 	router := gin.New()
 	router.Use(requestLogger(logger), gin.Recovery())
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"ok":        true,
+			"status":    "healthy",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+	})
 	router.POST(config.WebhookPath, func(c *gin.Context) {
 		raw, err := c.GetRawData()
 		if err != nil {
@@ -84,6 +91,7 @@ func main() {
 
 	go func() {
 		logger.Printf("using config file: %s", config.Path)
+		logger.Printf("health check available at http://127.0.0.1%s/health", config.ListenAddr)
 		logger.Printf("listening on http://127.0.0.1%s%s", config.ListenAddr, config.WebhookPath)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			exitf("webhook server failed: %v", err)
