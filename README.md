@@ -46,6 +46,8 @@ go get github.com/difyz9/runninghub-sdk-go
 - `examples/image_to_video/payload.example.json`
 - `examples/text_to_video/main.go`
 - `examples/text_to_video/payload.example.json`
+- `examples/fenjing/main.go`
+- `examples/fenjing/.env.example`
 - `examples/webhook/main.go`
 - `examples/webhook/payload.example.json`
 
@@ -246,6 +248,55 @@ log:
 收到回调后，示例会把回调 JSON 和请求日志写到配置的输出目标。回调体结构与 `/openapi/v2/query` 返回的任务结果一致，可以直接复用 SDK 中的 `QueryV2Response`。
 
 默认生成的 `config.yaml` 里会包含监听地址、回调路径和日志输出。提交任务时会固定读取 [examples/webhook/payload.example.json](examples/webhook/payload.example.json)。
+
+#### 示例 J：DeepSeek 分镜工作流
+
+这个示例对齐了 Python 版 `fenjing` 案例：先请求 DeepSeek 生成结构化分镜 JSON，再把 `storyboard_prompt` 回填到 RunningHub workflow，最后下载生成图片。
+
+它默认读取两处 `.env`：
+
+- `./examples/fenjing/.env`
+- 仓库根目录 `./.env`
+
+建议先基于模板准备环境变量：
+
+```bash
+cp ./examples/fenjing/.env.example ./examples/fenjing/.env
+```
+
+至少需要填这两个 key：
+
+- `RUNNINGHUB_API_KEY`
+- `DEEPSEEK_API_KEY`
+
+直接运行：
+
+```bash
+go run ./examples/fenjing
+```
+
+默认行为：
+
+- Workflow ID: `2013908081847046145`
+- DeepSeek model: `deepseek-chat`
+- Prompt 输出 JSON: `./examples/fenjing/outputs/deepseek_fenjing_storyboard_prompt.json`
+- 下载目录: `./examples/fenjing/downloads/`
+
+如果你的 workflow 副本使用不同的 `CR Prompt Text` 节点，可以覆盖：
+
+```bash
+export RUNNINGHUB_FENJING_PROMPT_NODE_IDS="343,411"
+go run ./examples/fenjing
+```
+
+也支持直接传 flag 覆盖，例如：
+
+```bash
+go run ./examples/fenjing \
+	-workflow-id 2013908081847046145 \
+	-idea "少女在废弃游乐园里寻找失踪的哥哥，气氛从诡异逐渐升级到惊悚" \
+	-style "国漫分镜，电影感构图，惊悚悬疑，潮湿雾气，强对比光影"
+```
 
 各独立示例支持的主要参数：
 

@@ -17,6 +17,9 @@ pids
 *.png
 *.jpg
 *.yaml
+*png
+outputs/
+downloads/
 
 # Coverage directory used by tools like istanbul
 coverage/

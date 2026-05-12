@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	DefaultPollInterval = 2 * time.Second
-	DefaultWaitTimeout  = 10 * time.Minute
+	DefaultPollInterval = 5 * time.Second
+	DefaultWaitTimeout  = 30 * time.Minute
 )
 
 type RunningHubClient = Client
