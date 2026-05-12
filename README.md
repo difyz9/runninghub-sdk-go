@@ -48,6 +48,8 @@ go get github.com/difyz9/runninghub-sdk-go
 - `examples/text_to_video/payload.example.json`
 - `examples/fenjing/main.go`
 - `examples/fenjing/.env.example`
+- `examples/fenjing_downloads_to_video/main.go`
+- `examples/fenjing_downloads_to_video/.env.example`
 - `examples/webhook/main.go`
 - `examples/webhook/payload.example.json`
 
@@ -297,6 +299,55 @@ go run ./examples/fenjing \
 	-idea "少女在废弃游乐园里寻找失踪的哥哥，气氛从诡异逐渐升级到惊悚" \
 	-style "国漫分镜，电影感构图，惊悚悬疑，潮湿雾气，强对比光影"
 ```
+
+#### 示例 K：把分镜下载图串成视频片段
+
+这个示例对齐 Python 版 `run_fenjing_downloads_to_video.py`：
+
+- 默认读取 `examples/fenjing/downloads/` 下最新的一个分镜目录
+- 按文件名排序后做相邻配对：第 1 张到第 2 张、第 2 张到第 3 张，依次类推
+- 每一对图片都会上传为 Wan 2.2 首尾帧工作流的首帧和尾帧
+- 下载每个任务返回的 mp4 片段
+- 如果本机有 `ffmpeg`，会额外把片段合并成一个本地 mp4
+
+建议先准备环境变量模板：
+
+```bash
+cp ./examples/fenjing_downloads_to_video/.env.example ./examples/fenjing_downloads_to_video/.env
+```
+
+最少只需要填：
+
+- `RUNNINGHUB_API_KEY`
+
+直接运行：
+
+```bash
+go run ./examples/fenjing_downloads_to_video
+```
+
+如果你想指定某个已经下载好的分镜目录：
+
+```bash
+export RUNNINGHUB_FENJING_STORYBOARD_DIR="./examples/fenjing/downloads/fenjing_2054120387821879298"
+go run ./examples/fenjing_downloads_to_video
+```
+
+默认输出位置：
+
+- 视频片段目录：`./downloads/fenjing_video_segments/<storyboard_dir>/<task_id>/`
+- 合并视频目录：`./downloads/fenjing_video_merged/`
+
+如果你想覆盖首尾帧工作流节点或提示词，可以设置这些环境变量：
+
+- `RUNNINGHUB_FIRST2LAST_FIRST_FRAME_NODE_ID`
+- `RUNNINGHUB_FIRST2LAST_LAST_FRAME_NODE_ID`
+- `RUNNINGHUB_FIRST2LAST_TEXT_NODE_ID`
+- `RUNNINGHUB_FIRST2LAST_POSITIVE_PROMPT`
+- `RUNNINGHUB_FIRST2LAST_NEGATIVE_PROMPT`
+- `RUNNINGHUB_FIRST2LAST_SEED`
+- `RUNNINGHUB_FIRST2LAST_HIGH_NOISE_SEED`
+- `RUNNINGHUB_FIRST2LAST_LOW_NOISE_SEED`
 
 各独立示例支持的主要参数：
 
