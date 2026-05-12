@@ -295,6 +295,70 @@ func main() {
 }
 ```
 
+### 1.1) Python 风格迁移写法
+
+如果你是把 Python SDK 里的案例平移到 Go，现在也可以直接按接近 Python 的调用顺序来写：
+
+- `runninghub.CreateClient(...)` / `runninghub.NewClient(...)`
+- `client.Run(...)`
+- `client.RunWithModifier(...)`
+- `client.WaitForCompletion(...)`
+- `runninghub.ModifyNodes()`
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	"github.com/difyz9/runninghub-sdk-go/runninghub"
+)
+
+func main() {
+	client, err := runninghub.CreateClient(os.Getenv("RUNNINGHUB_API_KEY"))
+	if err != nil {
+		panic(err)
+	}
+
+	modifier := runninghub.
+		ModifyNodes().
+		Text("6", "a cinematic travel poster").
+		Seed("3", 12345).
+		Steps("3", 28)
+
+	addMetadata := true
+	usePersonalQueue := false
+
+	task, err := client.RunWithModifier(context.Background(), "2037060865681264641", modifier, &runninghub.RunOptions{
+		AddMetadata:      &addMetadata,
+		InstanceType:     "default",
+		UsePersonalQueue: &usePersonalQueue,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := client.WaitForCompletion(context.Background(), task.TaskID, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println("status=", result.Status)
+	fmt.Println("results=", result.Results)
+}
+```
+
+如果你迁移的是 Python 的 `run_ai_app(...)` 写法，可以改成：
+
+```go
+modifier := runninghub.ModifyNodes().Set("41", "select", "7").Text("50", "润色这段话")
+task, err := client.RunAIAppWithModifier(context.Background(), "2016796569449795585", modifier, nil)
+```
+
+这层兼容 API 只是 public surface 的补充，底层现有的 `RunWorkflow`、`RunAIApp`、`RunStandardModel` 仍然保持不变。
+
 ### 2) 标准模型 API：通用调用 + 轮询结果
 
 标准模型 API 的共同模式通常是：

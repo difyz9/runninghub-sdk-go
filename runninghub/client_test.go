@@ -114,6 +114,150 @@ func TestUploadBinaryReader_Multipart(t *testing.T) {
 	}
 }
 
+func TestCreateClientAliasAndRunWithModifier(t *testing.T) {
+	usePersonalQueue := false
+	addMetadata := true
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/openapi/v2/run/workflow/wf-123" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		nodeInfoList, ok := body["nodeInfoList"].([]any)
+		if !ok || len(nodeInfoList) != 3 {
+			t.Fatalf("nodeInfoList=%#v", body["nodeInfoList"])
+		}
+		if body["addMetadata"] != true {
+			t.Fatalf("addMetadata=%#v", body["addMetadata"])
+		}
+		if body["usePersonalQueue"] != false {
+			t.Fatalf("usePersonalQueue=%#v", body["usePersonalQueue"])
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"taskId":       "task-run",
+			"status":       "RUNNING",
+			"errorCode":    "",
+			"errorMessage": "",
+			"clientId":     "c1",
+			"promptTips":   "",
+		})
+	}))
+	defer srv.Close()
+
+	c, err := CreateClient("testkey", WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	modifier := ModifyNodes().Text("6", "hello").Seed("3", 123).Steps("3", 25)
+	resp, err := c.RunWithModifier(context.Background(), "wf-123", modifier, &RunOptions{
+		AddMetadata:      &addMetadata,
+		UsePersonalQueue: &usePersonalQueue,
+		InstanceType:     "default",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.TaskID != "task-run" {
+		t.Fatalf("TaskID=%q", resp.TaskID)
+	}
+}
+
+func TestRunAIAppWithModifier(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/openapi/v2/run/ai-app/app-123" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		nodeInfoList, ok := body["nodeInfoList"].([]any)
+		if !ok || len(nodeInfoList) != 2 {
+			t.Fatalf("nodeInfoList=%#v", body["nodeInfoList"])
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"taskId":       "task-ai-app",
+			"status":       "RUNNING",
+			"errorCode":    "",
+			"errorMessage": "",
+			"clientId":     "c2",
+			"promptTips":   "",
+		})
+	}))
+	defer srv.Close()
+
+	c, err := NewClient("testkey", WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	modifier := ModifyNodes().Set("41", "select", "7").Text("50", "润色这段话")
+	resp, err := c.RunAIAppWithModifier(context.Background(), "app-123", modifier, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.TaskID != "task-ai-app" {
+		t.Fatalf("TaskID=%q", resp.TaskID)
+	}
+}
+
+func TestWaitForCompletionCallsStatusHook(t *testing.T) {
+	statuses := []string{"RUNNING", "SUCCESS"}
+	callCount := 0
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/openapi/v2/query" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		status := statuses[callCount]
+		callCount++
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"taskId":       "task-wait",
+			"status":       status,
+			"errorCode":    "",
+			"errorMessage": "",
+			"results":      []map[string]any{{"url": "https://example.com/1", "outputType": "png"}},
+			"clientId":     "c3",
+			"promptTips":   "",
+		})
+	}))
+	defer srv.Close()
+
+	c, err := New("testkey", WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var seen []TaskStatus
+	out, err := c.WaitForCompletion(context.Background(), "task-wait", &WaitForCompletionOptions{
+		PollInterval: 10 * time.Millisecond,
+		OnStatusChange: func(status TaskStatus) {
+			seen = append(seen, status)
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Status != "SUCCESS" {
+		t.Fatalf("Status=%q", out.Status)
+	}
+	if len(seen) != 2 || seen[0] != TaskStatusRunning || seen[1] != TaskStatusSuccess {
+		t.Fatalf("seen=%v", seen)
+	}
+}
+
 func TestCreateComfyTaskSimple(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/task/openapi/create" {
