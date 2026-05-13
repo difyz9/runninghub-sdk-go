@@ -29,6 +29,7 @@ type UploadBinaryData struct {
 type AIAppNodeInfo struct {
 	NodeID      string `json:"nodeId"`
 	FieldName   string `json:"fieldName"`
+	FieldData   any    `json:"fieldData,omitempty"`
 	FieldValue  any    `json:"fieldValue"`
 	Description string `json:"description,omitempty"`
 }
@@ -115,10 +116,10 @@ type APIKeyItem struct {
 // --- Queue status ---
 
 type QueueStatusData struct {
-	APIKeyType       string `json:"apiKeyType"`
-	ConcurrentLimit  int    `json:"concurrentLimit"`
-	RunningCount     string `json:"runningCount"`
-	QueuedCount      string `json:"queuedCount"`
+	APIKeyType        string `json:"apiKeyType"`
+	ConcurrentLimit   int    `json:"concurrentLimit"`
+	RunningCount      string `json:"runningCount"`
+	QueuedCount       string `json:"queuedCount"`
 	TotalCurrentTasks string `json:"totalCurrentTasks"`
 }
 
@@ -149,13 +150,13 @@ type GetTaskStatusRequest struct {
 }
 
 type TaskOutputItem struct {
-	FileURL              string `json:"fileUrl"`
-	FileType             string `json:"fileType"`
-	TaskCostTime          string `json:"taskCostTime"`
-	NodeID               string `json:"nodeId"`
-	ThirdPartyConsumeMoney any   `json:"thirdPartyConsumeMoney"`
-	ConsumeMoney         any    `json:"consumeMoney"`
-	ConsumeCoins         string `json:"consumeCoins"`
+	FileURL                string `json:"fileUrl"`
+	FileType               string `json:"fileType"`
+	TaskCostTime           string `json:"taskCostTime"`
+	NodeID                 string `json:"nodeId"`
+	ThirdPartyConsumeMoney any    `json:"thirdPartyConsumeMoney"`
+	ConsumeMoney           any    `json:"consumeMoney"`
+	ConsumeCoins           string `json:"consumeCoins"`
 }
 
 type TaskOutputsFailedReason struct {
@@ -225,36 +226,36 @@ type ResourcePosterInfo struct {
 }
 
 type ResourceVersion struct {
-	ID                 string              `json:"id"`
-	Version            string              `json:"version"`
-	VersionResourceName string             `json:"versionResourceName"`
-	BaseModel          string              `json:"baseModel"`
-	BaseModelSubtype   string              `json:"baseModelSubtype"`
-	TriggerWords       string              `json:"triggerWords"`
-	Desc              string              `json:"desc"`
-	PosterInfos        []ResourcePosterInfo `json:"posterInfos"`
+	ID                  string               `json:"id"`
+	Version             string               `json:"version"`
+	VersionResourceName string               `json:"versionResourceName"`
+	BaseModel           string               `json:"baseModel"`
+	BaseModelSubtype    string               `json:"baseModelSubtype"`
+	TriggerWords        string               `json:"triggerWords"`
+	Desc                string               `json:"desc"`
+	PosterInfos         []ResourcePosterInfo `json:"posterInfos"`
 }
 
 type ResourceRecord struct {
-	ID            string          `json:"id"`
-	ResourceName  string          `json:"resourceName"`
-	ResourceType  string          `json:"resourceType"`
-	CreateTime    string          `json:"createTime"`
-	Desc          string          `json:"desc"`
-	NodeModelName string          `json:"nodeModelName"`
-	PosterURL     string          `json:"posterUrl"`
-	ThumbnailURL  string          `json:"thumbnailUrl"`
-	Owner         ResourceOwner   `json:"owner"`
-	Tags          []ResourceTag   `json:"tags"`
+	ID            string            `json:"id"`
+	ResourceName  string            `json:"resourceName"`
+	ResourceType  string            `json:"resourceType"`
+	CreateTime    string            `json:"createTime"`
+	Desc          string            `json:"desc"`
+	NodeModelName string            `json:"nodeModelName"`
+	PosterURL     string            `json:"posterUrl"`
+	ThumbnailURL  string            `json:"thumbnailUrl"`
+	Owner         ResourceOwner     `json:"owner"`
+	Tags          []ResourceTag     `json:"tags"`
 	Versions      []ResourceVersion `json:"versions"`
 }
 
 type ListPublicResourcesPage struct {
 	Records     []ResourceRecord `json:"records"`
-	Size        int             `json:"size"`
-	Current     int             `json:"current"`
-	Total       int             `json:"total"`
-	Pages       int             `json:"pages"`
-	HasNext     bool            `json:"hasNext"`
-	HasPrevious bool            `json:"hasPrevious"`
+	Size        int              `json:"size"`
+	Current     int              `json:"current"`
+	Total       int              `json:"total"`
+	Pages       int              `json:"pages"`
+	HasNext     bool             `json:"hasNext"`
+	HasPrevious bool             `json:"hasPrevious"`
 }

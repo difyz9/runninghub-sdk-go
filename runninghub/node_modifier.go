@@ -13,13 +13,23 @@ func NewNodeModifier() *NodeModifier {
 }
 
 func (m *NodeModifier) Set(nodeID, fieldName string, fieldValue any) *NodeModifier {
+	return m.SetDetailed(nodeID, fieldName, fieldValue, nil, "")
+}
+
+func (m *NodeModifier) SetWithFieldData(nodeID, fieldName string, fieldValue any, fieldData any) *NodeModifier {
+	return m.SetDetailed(nodeID, fieldName, fieldValue, fieldData, "")
+}
+
+func (m *NodeModifier) SetDetailed(nodeID, fieldName string, fieldValue any, fieldData any, description string) *NodeModifier {
 	if m == nil {
 		m = &NodeModifier{}
 	}
 	m.modifications = append(m.modifications, WorkflowNodeInfo{
-		NodeID:     nodeID,
-		FieldName:  fieldName,
-		FieldValue: fieldValue,
+		NodeID:      nodeID,
+		FieldName:   fieldName,
+		FieldData:   fieldData,
+		FieldValue:  fieldValue,
+		Description: description,
 	})
 	return m
 }
@@ -113,9 +123,11 @@ func (m *NodeModifier) ToAIAppNodeInfoList() []AIAppNodeInfo {
 	out := make([]AIAppNodeInfo, 0, len(m.modifications))
 	for _, item := range m.modifications {
 		out = append(out, AIAppNodeInfo{
-			NodeID:     item.NodeID,
-			FieldName:  item.FieldName,
-			FieldValue: item.FieldValue,
+			NodeID:      item.NodeID,
+			FieldName:   item.FieldName,
+			FieldData:   item.FieldData,
+			FieldValue:  item.FieldValue,
+			Description: item.Description,
 		})
 	}
 	return out
