@@ -1,6 +1,9 @@
 package runninghub
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 type Envelope[T any] struct {
 	Code          int             `json:"code"`
@@ -129,6 +132,20 @@ type CreateComfyTaskSimpleRequest struct {
 	APIKey      string `json:"apiKey"`
 	WorkflowID  string `json:"workflowId"`
 	AddMetadata *bool  `json:"addMetadata,omitempty"`
+	AccessPassword string `json:"accessPassword,omitempty"`
+}
+
+type CreateComfyTaskAdvancedRequest struct {
+	APIKey           string             `json:"apiKey"`
+	WorkflowID       string             `json:"workflowId,omitempty"`
+	NodeInfoList     []WorkflowNodeInfo `json:"nodeInfoList,omitempty"`
+	AddMetadata      *bool              `json:"addMetadata,omitempty"`
+	WebhookURL       string             `json:"webhookUrl,omitempty"`
+	Workflow         string             `json:"workflow,omitempty"`
+	InstanceType     string             `json:"instanceType,omitempty"`
+	UsePersonalQueue *bool              `json:"usePersonalQueue,omitempty"`
+	RetainSeconds    *int               `json:"retainSeconds,omitempty"`
+	AccessPassword   string             `json:"accessPassword,omitempty"`
 }
 
 type TaskCreateResponse struct {
@@ -137,6 +154,45 @@ type TaskCreateResponse struct {
 	ClientID   string `json:"clientId"`
 	TaskStatus string `json:"taskStatus"`
 	PromptTips string `json:"promptTips"`
+}
+
+func (r *TaskCreateResponse) UnmarshalJSON(data []byte) error {
+	type alias struct {
+		NetWssURL  string          `json:"netWssUrl"`
+		TaskID     json.RawMessage `json:"taskId"`
+		ClientID   string          `json:"clientId"`
+		TaskStatus string          `json:"taskStatus"`
+		PromptTips string          `json:"promptTips"`
+	}
+
+	var raw alias
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	r.NetWssURL = raw.NetWssURL
+	r.ClientID = raw.ClientID
+	r.TaskStatus = raw.TaskStatus
+	r.PromptTips = raw.PromptTips
+
+	if len(raw.TaskID) == 0 || string(raw.TaskID) == "null" {
+		r.TaskID = 0
+		return nil
+	}
+	if err := json.Unmarshal(raw.TaskID, &r.TaskID); err == nil {
+		return nil
+	}
+
+	var taskIDString string
+	if err := json.Unmarshal(raw.TaskID, &taskIDString); err != nil {
+		return err
+	}
+	var parsed int64
+	if _, err := fmt.Sscanf(taskIDString, "%d", &parsed); err != nil {
+		return err
+	}
+	r.TaskID = parsed
+	return nil
 }
 
 type CancelTaskRequest struct {
@@ -186,6 +242,99 @@ type GetWorkflowJSONRequest struct {
 
 type GetWorkflowJSONData struct {
 	Prompt string `json:"prompt"`
+}
+
+// --- Legacy AI App ---
+
+type CreateAIAppTaskRequest struct {
+	APIKey           string          `json:"apiKey"`
+	WebappID         string          `json:"webappId"`
+	NodeInfoList     []AIAppNodeInfo `json:"nodeInfoList,omitempty"`
+	WebhookURL       string          `json:"webhookUrl,omitempty"`
+	InstanceType     string          `json:"instanceType,omitempty"`
+	AccessPassword   string          `json:"accessPassword,omitempty"`
+	UsePersonalQueue *bool           `json:"usePersonalQueue,omitempty"`
+	RetainSeconds    *int            `json:"retainSeconds,omitempty"`
+}
+
+type AIAppStatisticsInfo struct {
+	LikeCount    string `json:"likeCount"`
+	DownloadCount string `json:"downloadCount"`
+	UseCount     string `json:"useCount"`
+	PV           string `json:"pv"`
+	CollectCount string `json:"collectCount"`
+}
+
+type AIAppDemoNodeInfo struct {
+	NodeID        string `json:"nodeId"`
+	NodeName      string `json:"nodeName,omitempty"`
+	FieldName     string `json:"fieldName"`
+	FieldValue    any    `json:"fieldValue"`
+	FieldData     any    `json:"fieldData,omitempty"`
+	FieldType     string `json:"fieldType,omitempty"`
+	Description   string `json:"description,omitempty"`
+	DescriptionEn string `json:"descriptionEn,omitempty"`
+}
+
+type AIAppDemoCover struct {
+	ID           string `json:"id"`
+	ObjName      string `json:"objName"`
+	URL          string `json:"url"`
+	ThumbnailURI string `json:"thumbnailUri"`
+	ImageWidth   string `json:"imageWidth"`
+	ImageHeight  string `json:"imageHeight"`
+}
+
+type AIAppDemoTag struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	NameEn  string `json:"nameEn,omitempty"`
+	Labels  any    `json:"labels,omitempty"`
+}
+
+type AIAppAPICallDemoData struct {
+	Curl            string               `json:"curl"`
+	AccessEncrypted bool                 `json:"accessEncrypted"`
+	WebappName      string               `json:"webappName"`
+	StatisticsInfo  *AIAppStatisticsInfo `json:"statisticsInfo,omitempty"`
+	NodeInfoList    []AIAppDemoNodeInfo  `json:"nodeInfoList,omitempty"`
+	Covers          []AIAppDemoCover     `json:"covers,omitempty"`
+	Tags            []AIAppDemoTag       `json:"tags,omitempty"`
+}
+
+// --- Webhook ---
+
+type WebhookDetailData struct {
+	ID               string `json:"id"`
+	UserAPIKey       string `json:"userApiKey"`
+	TaskID           string `json:"taskId"`
+	WebhookURL       string `json:"webhookUrl"`
+	Event            string `json:"event"`
+	EventData        string `json:"eventData"`
+	CallbackStatus   string `json:"callbackStatus"`
+	CallbackResponse string `json:"callbackResponse"`
+	RetryCount       int    `json:"retryCount"`
+	CreateTime       string `json:"createTime"`
+	UpdateTime       string `json:"updateTime"`
+}
+
+type RetryWebhookRequest struct {
+	APIKey     string `json:"apiKey"`
+	WebhookID  string `json:"webhookId"`
+	WebhookURL string `json:"webhookUrl,omitempty"`
+}
+
+// --- Lora upload ---
+
+type GetLoraUploadURLRequest struct {
+	APIKey   string `json:"apiKey"`
+	LoraName string `json:"loraName"`
+	MD5Hex   string `json:"md5Hex"`
+}
+
+type LoraUploadURLData struct {
+	FileName string `json:"fileName"`
+	URL      string `json:"url"`
 }
 
 // --- Public resources ---

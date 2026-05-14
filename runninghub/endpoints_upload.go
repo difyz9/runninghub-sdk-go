@@ -92,3 +92,24 @@ func (c *Client) UploadBinaryReader(ctx context.Context, r io.Reader, filename s
 	}
 	return resp.Data, nil
 }
+
+// GetLoraUploadURL calls POST /api/openapi/getLoraUploadUrl.
+func (c *Client) GetLoraUploadURL(ctx context.Context, loraName, md5Hex string) (*LoraUploadURLData, error) {
+	in := GetLoraUploadURLRequest{
+		APIKey:   c.apiKey,
+		LoraName: loraName,
+		MD5Hex:   md5Hex,
+	}
+
+	var resp Envelope[LoraUploadURLData]
+	if err := c.doJSON(ctx, http.MethodPost, "/api/openapi/getLoraUploadUrl", nil, nil, in, &resp); err != nil {
+		return nil, err
+	}
+	if resp.Code != 0 {
+		return nil, &APIError{Code: resp.Code, Message: resp.Msg, Details: resp.ErrorMessages}
+	}
+	if resp.Data == nil {
+		return nil, &APIError{Code: resp.Code, Message: "empty data"}
+	}
+	return resp.Data, nil
+}

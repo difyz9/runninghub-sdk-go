@@ -6,12 +6,11 @@ import (
 	"net/http"
 )
 
-// CreateComfyTaskSimple calls POST /task/openapi/create.
-// This is the "简易" mode: it runs the workflow without changing any parameters.
-func (c *Client) CreateComfyTaskSimple(ctx context.Context, workflowID string, addMetadata *bool) (*TaskCreateResponse, error) {
-	in := CreateComfyTaskSimpleRequest{APIKey: c.apiKey, WorkflowID: workflowID, AddMetadata: addMetadata}
+// RunLegacyComfyTaskSimple calls POST /task/openapi/create using the legacy simple-mode payload.
+func (c *Client) RunLegacyComfyTaskSimple(ctx context.Context, req CreateComfyTaskSimpleRequest) (*TaskCreateResponse, error) {
+	req.APIKey = c.apiKey
 	var resp Envelope[TaskCreateResponse]
-	if err := c.doJSON(ctx, http.MethodPost, "/task/openapi/create", nil, nil, in, &resp); err != nil {
+	if err := c.doJSON(ctx, http.MethodPost, "/task/openapi/create", nil, nil, req, &resp); err != nil {
 		return nil, err
 	}
 	if resp.Code != 0 {
@@ -21,6 +20,39 @@ func (c *Client) CreateComfyTaskSimple(ctx context.Context, workflowID string, a
 		return nil, &APIError{Code: resp.Code, Message: "empty data"}
 	}
 	return resp.Data, nil
+}
+
+// Deprecated: use RunLegacyComfyTaskSimple.
+func (c *Client) CreateComfyTaskSimpleWithRequest(ctx context.Context, req CreateComfyTaskSimpleRequest) (*TaskCreateResponse, error) {
+	return c.RunLegacyComfyTaskSimple(ctx, req)
+}
+
+// CreateComfyTaskSimple calls POST /task/openapi/create.
+// This is the "简易" mode: it runs the workflow without changing any parameters.
+func (c *Client) CreateComfyTaskSimple(ctx context.Context, workflowID string, addMetadata *bool) (*TaskCreateResponse, error) {
+	in := CreateComfyTaskSimpleRequest{WorkflowID: workflowID, AddMetadata: addMetadata}
+	return c.RunLegacyComfyTaskSimple(ctx, in)
+}
+
+// RunLegacyComfyTask calls POST /task/openapi/create using the legacy advanced-mode payload.
+func (c *Client) RunLegacyComfyTask(ctx context.Context, req CreateComfyTaskAdvancedRequest) (*TaskCreateResponse, error) {
+	req.APIKey = c.apiKey
+	var resp Envelope[TaskCreateResponse]
+	if err := c.doJSON(ctx, http.MethodPost, "/task/openapi/create", nil, nil, req, &resp); err != nil {
+		return nil, err
+	}
+	if resp.Code != 0 {
+		return nil, &APIError{Code: resp.Code, Message: resp.Msg, Details: resp.ErrorMessages}
+	}
+	if resp.Data == nil {
+		return nil, &APIError{Code: resp.Code, Message: "empty data"}
+	}
+	return resp.Data, nil
+}
+
+// Deprecated: use RunLegacyComfyTask.
+func (c *Client) CreateComfyTaskAdvanced(ctx context.Context, req CreateComfyTaskAdvancedRequest) (*TaskCreateResponse, error) {
+	return c.RunLegacyComfyTask(ctx, req)
 }
 
 // CancelComfyTask calls POST /task/openapi/cancel.

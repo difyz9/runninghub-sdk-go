@@ -114,10 +114,6 @@ func (c *Client) WaitForCompletion(ctx context.Context, taskID string, options *
 	if options == nil {
 		options = &WaitForCompletionOptions{}
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
 	pollInterval := options.PollInterval
 	if pollInterval <= 0 {
 		pollInterval = DefaultPollInterval
@@ -127,9 +123,23 @@ func (c *Client) WaitForCompletion(ctx context.Context, taskID string, options *
 		options.Timeout = DefaultWaitTimeout
 	}
 
-	var cancel context.CancelFunc
-	ctx, cancel = context.WithTimeout(ctx, options.Timeout)
+	ctx, cancel := withOptionalTimeout(ctx, options.Timeout)
 	defer cancel()
+
+	return c.waitForTaskCompletion(ctx, taskID, pollInterval, options.OnStatusChange)
+}
+
+func withOptionalTimeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithTimeout(ctx, timeout)
+}
+
+func (c *Client) waitForTaskCompletion(ctx context.Context, taskID string, pollInterval time.Duration, onStatusChange func(TaskStatus)) (*V2QueryResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
 	for {
 		out, err := c.QueryTaskV2(ctx, taskID)
@@ -137,8 +147,8 @@ func (c *Client) WaitForCompletion(ctx context.Context, taskID string, options *
 			return nil, err
 		}
 
-		if options.OnStatusChange != nil && out != nil {
-			options.OnStatusChange(TaskStatus(out.Status))
+		if onStatusChange != nil && out != nil {
+			onStatusChange(TaskStatus(out.Status))
 		}
 
 		if out != nil && isTerminalTaskStatus(out.Status) {

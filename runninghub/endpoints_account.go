@@ -2,9 +2,9 @@ package runninghub
 
 import "context"
 
-// AccountStatus calls POST /uc/openapi/accountStatus.
+// GetAccountStatus calls POST /uc/openapi/accountStatus.
 // Note: request body uses `apikey` (lowercase), not `apiKey`.
-func (c *Client) AccountStatus(ctx context.Context) (*AccountStatusData, error) {
+func (c *Client) GetAccountStatus(ctx context.Context) (*AccountStatusData, error) {
 	in := struct {
 		APIKey string `json:"apikey"`
 	}{APIKey: c.apiKey}
@@ -20,4 +20,9 @@ func (c *Client) AccountStatus(ctx context.Context) (*AccountStatusData, error) 
 		return nil, &APIError{Code: resp.Code, Message: "empty data"}
 	}
 	return resp.Data, nil
+}
+
+// Deprecated: use GetAccountStatus.
+func (c *Client) AccountStatus(ctx context.Context) (*AccountStatusData, error) {
+	return c.GetAccountStatus(ctx)
 }

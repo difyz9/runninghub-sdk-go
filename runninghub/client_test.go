@@ -57,6 +57,70 @@ func TestAccountStatus_UsesApikeyField(t *testing.T) {
 	}
 }
 
+func TestCanonicalGetterAliases(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/uc/openapi/accountStatus":
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if body["apikey"] != "testkey" {
+				t.Fatalf("apikey=%v", body["apikey"])
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"code": 0,
+				"msg":  "success",
+				"data": map[string]any{"remainCoins": "1", "currentTaskCounts": "0", "apiType": "V2"},
+			})
+		case "/openapi/v2/api-key/list":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"code": 0,
+				"msg":  "success",
+				"data": []map[string]any{{"key": "k1", "status": 1, "quotaUsed": 0.0, "visible": true, "createdAt": "2026-01-01"}},
+			})
+		case "/openapi/v2/queue/status":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"code": 0,
+				"msg":  "success",
+				"data": map[string]any{"apiKeyType": "corp", "concurrentLimit": 2, "runningCount": "1", "queuedCount": "3", "totalCurrentTasks": "4"},
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	c, err := New("testkey", WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	account, err := c.GetAccountStatus(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if account.APIType != "V2" {
+		t.Fatalf("APIType=%q", account.APIType)
+	}
+
+	keys, err := c.ListAPIKeys(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(keys) != 1 || keys[0].Key != "k1" {
+		t.Fatalf("keys=%#v", keys)
+	}
+
+	queue, err := c.GetQueueStatus(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if queue.QueuedCount != "3" {
+		t.Fatalf("QueuedCount=%q", queue.QueuedCount)
+	}
+}
+
 func TestUploadBinaryReader_Multipart(t *testing.T) {
 	const fileContent = "hello"
 
@@ -299,6 +363,298 @@ func TestCreateComfyTaskSimple(t *testing.T) {
 	}
 	if resp.TaskID != 123 {
 		t.Fatalf("TaskID=%d", resp.TaskID)
+	}
+}
+
+func TestCreateComfyTaskAdvanced(t *testing.T) {
+	retainSeconds := 60
+	usePersonalQueue := false
+	addMetadata := true
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/task/openapi/create" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body["apiKey"] != "testkey" {
+			t.Fatalf("apiKey=%v", body["apiKey"])
+		}
+		if body["workflowId"] != "wf-adv" {
+			t.Fatalf("workflowId=%v", body["workflowId"])
+		}
+		if body["accessPassword"] != "secret" {
+			t.Fatalf("accessPassword=%v", body["accessPassword"])
+		}
+		if body["retainSeconds"] != float64(retainSeconds) {
+			t.Fatalf("retainSeconds=%v", body["retainSeconds"])
+		}
+		nodeInfoList, ok := body["nodeInfoList"].([]any)
+		if !ok || len(nodeInfoList) != 1 {
+			t.Fatalf("nodeInfoList=%#v", body["nodeInfoList"])
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code": 0,
+			"msg":  "success",
+			"data": map[string]any{
+				"taskId":     "1910246754753896450",
+				"clientId":   "client-1",
+				"taskStatus": "QUEUED",
+				"promptTips": "{}",
+			},
+		})
+	}))
+	defer srv.Close()
+
+	c, err := New("testkey", WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := c.CreateComfyTaskAdvanced(context.Background(), CreateComfyTaskAdvancedRequest{
+		WorkflowID:       "wf-adv",
+		NodeInfoList:     []WorkflowNodeInfo{{NodeID: "6", FieldName: "text", FieldValue: "hello"}},
+		AddMetadata:      &addMetadata,
+		WebhookURL:       "https://example.com/hook",
+		InstanceType:     "plus",
+		UsePersonalQueue: &usePersonalQueue,
+		RetainSeconds:    &retainSeconds,
+		AccessPassword:   "secret",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.TaskID != 1910246754753896450 {
+		t.Fatalf("TaskID=%d", out.TaskID)
+	}
+}
+
+func TestCreateAIAppTask(t *testing.T) {
+	usePersonalQueue := false
+	retainSeconds := 30
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/task/openapi/ai-app/run" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body["apiKey"] != "testkey" {
+			t.Fatalf("apiKey=%v", body["apiKey"])
+		}
+		if body["webappId"] != "app-legacy" {
+			t.Fatalf("webappId=%v", body["webappId"])
+		}
+		if body["accessPassword"] != "pw" {
+			t.Fatalf("accessPassword=%v", body["accessPassword"])
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code": 0,
+			"msg":  "success",
+			"data": map[string]any{
+				"taskId":     1907035719658053634,
+				"clientId":   "legacy-client",
+				"taskStatus": "RUNNING",
+				"promptTips": "{}",
+			},
+		})
+	}))
+	defer srv.Close()
+
+	c, err := New("testkey", WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := c.CreateAIAppTask(context.Background(), CreateAIAppTaskRequest{
+		WebappID:         "app-legacy",
+		NodeInfoList:     []AIAppNodeInfo{{NodeID: "122", FieldName: "prompt", FieldValue: "一个在教室里的金发女孩"}},
+		WebhookURL:       "https://example.com/webhook",
+		InstanceType:     "default",
+		AccessPassword:   "pw",
+		UsePersonalQueue: &usePersonalQueue,
+		RetainSeconds:    &retainSeconds,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.TaskID != 1907035719658053634 {
+		t.Fatalf("TaskID=%d", out.TaskID)
+	}
+}
+
+func TestGetAIAppAPICallDemo(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/webapp/apiCallDemo" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if r.URL.Query().Get("apiKey") != "testkey" {
+			t.Fatalf("apiKey=%q", r.URL.Query().Get("apiKey"))
+		}
+		if r.URL.Query().Get("webappId") != "app-demo" {
+			t.Fatalf("webappId=%q", r.URL.Query().Get("webappId"))
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code": 0,
+			"msg":  "success",
+			"data": map[string]any{
+				"curl":            "curl --request POST ...",
+				"accessEncrypted": false,
+				"webappName":      "Flux Kontext单图模式",
+				"statisticsInfo": map[string]any{
+					"likeCount":     "138",
+					"downloadCount": "0",
+					"useCount":      "34545",
+					"pv":            "0",
+					"collectCount":  "498",
+				},
+				"nodeInfoList": []map[string]any{{
+					"nodeId":      "39",
+					"fieldName":   "image",
+					"fieldValue":  "a.png",
+					"fieldType":   "IMAGE",
+					"description": "上传图像",
+				}},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	c, err := New("testkey", WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := c.GetAIAppAPICallDemo(context.Background(), "app-demo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.WebappName != "Flux Kontext单图模式" {
+		t.Fatalf("WebappName=%q", out.WebappName)
+	}
+	if len(out.NodeInfoList) != 1 || out.NodeInfoList[0].FieldName != "image" {
+		t.Fatalf("NodeInfoList=%#v", out.NodeInfoList)
+	}
+}
+
+func TestGetWebhookDetailAndRetryWebhook(t *testing.T) {
+	var retried bool
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/task/openapi/getWebhookDetail":
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if body["taskId"] != "task-1" {
+				t.Fatalf("taskId=%v", body["taskId"])
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"code": 0,
+				"msg":  "success",
+				"data": map[string]any{
+					"id":               "wh-1",
+					"userApiKey":       "********",
+					"taskId":           "task-1",
+					"webhookUrl":       "https://example.com/webhook",
+					"event":            "TASK_END",
+					"eventData":        "{}",
+					"callbackStatus":   "FAILED",
+					"callbackResponse": "timeout",
+					"retryCount":       3,
+					"createTime":       "2025-03-25T16:05:07",
+					"updateTime":       "2025-03-25T16:08:10",
+				},
+			})
+		case "/task/openapi/retryWebhook":
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if body["webhookId"] != "wh-1" {
+				t.Fatalf("webhookId=%v", body["webhookId"])
+			}
+			if body["webhookUrl"] != "https://example.com/retry" {
+				t.Fatalf("webhookUrl=%v", body["webhookUrl"])
+			}
+			retried = true
+			_ = json.NewEncoder(w).Encode(map[string]any{"code": 0, "msg": "", "data": nil})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	c, err := New("testkey", WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	detail, err := c.GetWebhookDetail(context.Background(), "task-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.ID != "wh-1" || detail.CallbackStatus != "FAILED" {
+		t.Fatalf("detail=%#v", detail)
+	}
+	if err := c.RetryWebhook(context.Background(), detail.ID, "https://example.com/retry"); err != nil {
+		t.Fatal(err)
+	}
+	if !retried {
+		t.Fatal("expected retry call")
+	}
+}
+
+func TestGetLoraUploadURL(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/openapi/getLoraUploadUrl" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body["loraName"] != "my-lora-name" {
+			t.Fatalf("loraName=%v", body["loraName"])
+		}
+		if body["md5Hex"] != "f8d958506e6c8044f79ccd7c814c6179" {
+			t.Fatalf("md5Hex=%v", body["md5Hex"])
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code": 0,
+			"msg":  "success",
+			"data": map[string]any{
+				"fileName": "api-lora-cn/f8d958506e6c8044f79ccd7c814c6179.safetensors",
+				"url":      "https://rh-models.example.com/upload",
+			},
+		})
+	}))
+	defer srv.Close()
+
+	c, err := New("testkey", WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := c.GetLoraUploadURL(context.Background(), "my-lora-name", "f8d958506e6c8044f79ccd7c814c6179")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.FileName == "" || out.URL == "" {
+		t.Fatalf("out=%#v", out)
 	}
 }
 

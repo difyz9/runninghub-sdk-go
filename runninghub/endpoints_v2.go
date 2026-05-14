@@ -54,8 +54,8 @@ func normalizeWorkflowPath(workflowIDOrPath string) (string, error) {
 	return "/openapi/v2/run/workflow/" + p, nil
 }
 
-// APIKeyList calls GET /openapi/v2/api-key/list.
-func (c *Client) APIKeyList(ctx context.Context) ([]APIKeyItem, error) {
+// ListAPIKeys calls GET /openapi/v2/api-key/list.
+func (c *Client) ListAPIKeys(ctx context.Context) ([]APIKeyItem, error) {
 	var resp Envelope[[]APIKeyItem]
 	if err := c.doJSON(ctx, http.MethodGet, "/openapi/v2/api-key/list", nil, nil, nil, &resp); err != nil {
 		return nil, err
@@ -69,8 +69,13 @@ func (c *Client) APIKeyList(ctx context.Context) ([]APIKeyItem, error) {
 	return *resp.Data, nil
 }
 
-// QueueStatus calls GET /openapi/v2/queue/status.
-func (c *Client) QueueStatus(ctx context.Context) (*QueueStatusData, error) {
+// Deprecated: use ListAPIKeys.
+func (c *Client) APIKeyList(ctx context.Context) ([]APIKeyItem, error) {
+	return c.ListAPIKeys(ctx)
+}
+
+// GetQueueStatus calls GET /openapi/v2/queue/status.
+func (c *Client) GetQueueStatus(ctx context.Context) (*QueueStatusData, error) {
 	var resp Envelope[QueueStatusData]
 	if err := c.doJSON(ctx, http.MethodGet, "/openapi/v2/queue/status", nil, nil, nil, &resp); err != nil {
 		return nil, err
@@ -79,6 +84,11 @@ func (c *Client) QueueStatus(ctx context.Context) (*QueueStatusData, error) {
 		return nil, &APIError{Code: resp.Code, Message: resp.Msg, Details: resp.ErrorMessages}
 	}
 	return resp.Data, nil
+}
+
+// Deprecated: use GetQueueStatus.
+func (c *Client) QueueStatus(ctx context.Context) (*QueueStatusData, error) {
+	return c.GetQueueStatus(ctx)
 }
 
 // QueryTaskV2 calls POST /openapi/v2/query.
